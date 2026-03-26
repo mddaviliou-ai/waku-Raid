@@ -66,7 +66,7 @@
             { id: 'b_pap_h', name: '拉圖斯(困難)', icon: '😈', color: '#8b5cf6' }
         ];
 
-        // 1. 玩家帳號 (保留管理員方便登入)
+        // 1. 玩家帳號 
         const initialAccounts = [
             { id: 'a1', playerName: '伊爾參寺', role: 'admin', passcode: 'admin' },
             { id: 'a2', playerName: '熱狗蛋蛋', role: 'subadmin', passcode: 'admin' }
@@ -99,13 +99,8 @@
             { id: 'jc_p_4', group: '海盜系', name: '槍神', bgColor: '#ffedd5', textColor: '#9a3412', borderColor: '#fdba74' }
         ];
 
-        // 3. 遊戲角色 (已清空，等玩家自行建立)
         const initialCharacters = [];
-
-        // 4. 報名狀態 (已清空)
         const initialAvailability = {};
-
-        // 5. 群組狀態 (已清空)
         const initialGroups = [];
 
         const App = () => {
@@ -191,7 +186,7 @@
             const handleLogin = (id) => {
                 setLoggedInId(id);
                 localStorage.setItem('waku-raid-loggedInId', id);
-                setActiveTab('my-schedule'); // 統一預設進入「我的報名表」
+                setActiveTab('my-schedule'); 
             };
 
             const handleLogout = () => {
@@ -279,7 +274,7 @@
                     
                     setAvailability({
                         ...availability,
-                        [newCharId]: { days: Array(7).fill(false), bosses: [], note: '' }
+                        [newCharId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' }
                     });
                 }
                 
@@ -312,7 +307,6 @@
                 const [passcode, setPasscode] = useState('');
                 const [error, setError] = useState('');
 
-                // 一鍵重置雲端帳號的功能 (包含清除所有幽靈角色與排班)
                 const forceResetAccounts = () => {
                     if(window.confirm('這將會清除雲端舊帳號與舊名單，並載入最新乾淨的初始狀態，確定要執行嗎？')) {
                         setAccounts(initialAccounts);
@@ -374,23 +368,47 @@
                 const myCharacters = characters.filter(c => c.accountId === currentAccount.id);
 
                 const toggleDay = (charId, index) => {
-                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], note: '' };
+                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
                     const newDays = [...charAvail.days];
                     newDays[index] = !newDays[index];
                     setAvailability({ ...availability, [charId]: { ...charAvail, days: newDays } });
                 };
 
                 const toggleBoss = (charId, bossId) => {
-                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], note: '' };
+                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
                     const currentBosses = charAvail.bosses || [];
-                    const newBosses = currentBosses.includes(bossId) 
-                        ? currentBosses.filter(id => id !== bossId) 
-                        : [...currentBosses, bossId];
-                    setAvailability({ ...availability, [charId]: { ...charAvail, bosses: newBosses } });
+                    const currentCounts = charAvail.bossCounts || {};
+
+                    if (currentBosses.includes(bossId)) {
+                        const newBosses = currentBosses.filter(id => id !== bossId);
+                        const newCounts = { ...currentCounts };
+                        delete newCounts[bossId];
+                        setAvailability({ ...availability, [charId]: { ...charAvail, bosses: newBosses, bossCounts: newCounts } });
+                    } else {
+                        setAvailability({ 
+                            ...availability, 
+                            [charId]: { 
+                                ...charAvail, 
+                                bosses: [...currentBosses, bossId],
+                                bossCounts: { ...currentCounts, [bossId]: 1 }
+                            } 
+                        });
+                    }
+                };
+
+                const updateBossCount = (charId, bossId, count) => {
+                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
+                    setAvailability({
+                        ...availability,
+                        [charId]: {
+                            ...charAvail,
+                            bossCounts: { ...(charAvail.bossCounts || {}), [bossId]: count }
+                        }
+                    });
                 };
 
                 const updateNote = (charId, e) => {
-                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], note: '' };
+                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
                     setAvailability({ ...availability, [charId]: { ...charAvail, note: e.target.value } });
                 };
 
@@ -408,7 +426,7 @@
                         </div>
 
                         {myCharacters.map((char) => {
-                            const charAvail = availability[char.id] || { days: Array(7).fill(false), bosses: [], note: '' };
+                            const charAvail = availability[char.id] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
                             return (
                                 <div key={char.id} className="bg-white p-6 rounded-lg shadow border border-gray-100">
                                     <div className="mb-4 flex justify-between items-center border-b pb-2">
@@ -432,22 +450,39 @@
                                         </div>
                                     </div>
 
-                                    {/* 王團選擇 */}
+                                    {/* 王團與場次選擇 */}
                                     <div className="mb-6 bg-orange-50 p-4 rounded-lg border border-orange-100">
-                                        <h3 className="font-bold text-orange-800 mb-3">請選擇此角色本週想打的王 (可複選)：</h3>
+                                        <h3 className="font-bold text-orange-800 mb-3">請選擇此角色本週想打的王與場次數 (可複選)：</h3>
                                         <div className="flex flex-wrap gap-4">
                                             {bosses.map(boss => {
                                                 const isChecked = (charAvail.bosses || []).includes(boss.id);
+                                                const count = (charAvail.bossCounts && charAvail.bossCounts[boss.id]) ? charAvail.bossCounts[boss.id] : 1;
                                                 return (
-                                                    <label key={boss.id} style={{ borderColor: isChecked ? boss.color : '#e5e7eb' }} className={`flex items-center space-x-2 cursor-pointer bg-white px-3 py-2 rounded border transition-all ${isChecked ? 'shadow-md scale-105' : 'hover:bg-gray-50'}`}>
-                                                        <input 
-                                                            type="checkbox" 
-                                                            className="w-4 h-4 rounded"
-                                                            checked={isChecked}
-                                                            onChange={() => toggleBoss(char.id, boss.id)}
-                                                        />
-                                                        <span className="font-bold" style={{ color: boss.color }}>{boss.icon} {boss.name}</span>
-                                                    </label>
+                                                    <div key={boss.id} style={{ borderColor: isChecked ? boss.color : '#e5e7eb' }} className={`flex items-center bg-white px-3 py-2 rounded border transition-all ${isChecked ? 'shadow-md' : 'hover:bg-gray-50'}`}>
+                                                        <label className="flex items-center space-x-2 cursor-pointer flex-1 mr-2">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                className="w-4 h-4 rounded"
+                                                                checked={isChecked}
+                                                                onChange={() => toggleBoss(char.id, boss.id)}
+                                                            />
+                                                            <span className="font-bold" style={{ color: boss.color }}>{boss.icon} {boss.name}</span>
+                                                        </label>
+                                                        {isChecked && (
+                                                            <div className="flex items-center border-l pl-2 border-gray-200">
+                                                                <span className="text-xs text-gray-500 mr-1">場次:</span>
+                                                                <input 
+                                                                    type="number" 
+                                                                    min="1" 
+                                                                    max="10" 
+                                                                    className="w-12 p-0.5 text-center border rounded text-xs font-bold focus:ring-1 focus:outline-none"
+                                                                    style={{ borderColor: boss.color, color: boss.color }}
+                                                                    value={count}
+                                                                    onChange={(e) => updateBossCount(char.id, boss.id, parseInt(e.target.value) || 1)}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 )
                                             })}
                                         </div>
@@ -560,7 +595,7 @@
                             </thead>
                             <tbody>
                                 {characters.map(char => {
-                                    const avail = availability[char.id] || { days: Array(7).fill(false), bosses: [], note: '' };
+                                    const avail = availability[char.id] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
                                     if(!avail.days.some(d => d)) return null; 
 
                                     return (
@@ -576,7 +611,12 @@
                                                 <div className="flex flex-wrap gap-1">
                                                     {(avail.bosses || []).map(bId => {
                                                         const b = bosses.find(x => x.id === bId);
-                                                        return b ? <span key={bId} style={{ backgroundColor: b.color, color: '#ffffff' }} className="px-1.5 py-0.5 rounded text-xs font-bold shadow-sm">{b.name}</span> : null;
+                                                        const count = avail.bossCounts?.[bId] || 1;
+                                                        return b ? (
+                                                            <span key={bId} style={{ borderColor: b.color, color: b.color }} className="bg-white px-1.5 py-0.5 rounded border text-xs font-bold shadow-sm whitespace-nowrap">
+                                                                {b.icon} {b.name} {count > 1 && `x${count}`}
+                                                            </span>
+                                                        ) : null;
                                                     })}
                                                 </div>
                                             </td>
@@ -593,18 +633,37 @@
                                                     <td key={dayIndex} className="p-2 border text-center align-top relative min-w-[90px]">
                                                         {isAvail ? (
                                                             <div className="flex flex-col items-center gap-1">
-                                                                {charGroupsOnDay.map(g => (
-                                                                    <div key={g.id} className="bg-green-100 text-green-800 text-[11px] px-1 py-0.5 rounded flex items-center justify-between w-full shadow-sm border border-green-300">
-                                                                        <span className="truncate flex-1 text-left font-bold" title={g.name}>{g.name}</span>
-                                                                        {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
-                                                                            <button onClick={() => removeCharFromGroup(char.id, g.id)} className="text-red-500 hover:text-red-700 ml-1 font-black px-1">×</button>
-                                                                        )}
-                                                                    </div>
-                                                                ))}
+                                                                {charGroupsOnDay.map(g => {
+                                                                    const b = bosses.find(x => x.id === g.bossId);
+                                                                    const tagColor = b ? b.color : '#3b82f6';
+                                                                    return (
+                                                                        <div key={g.id} style={{ borderColor: tagColor, color: tagColor }} className="bg-white text-[11px] px-1 py-0.5 rounded flex items-center justify-between w-full shadow-sm border font-bold mb-1">
+                                                                            <span className="truncate flex-1 text-left" title={g.name}>{g.name}</span>
+                                                                            {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
+                                                                                <button onClick={() => removeCharFromGroup(char.id, g.id)} className="hover:opacity-70 ml-1 font-black px-1" style={{ color: tagColor }}>×</button>
+                                                                            )}
+                                                                        </div>
+                                                                    )
+                                                                })}
 
                                                                 {charGroupsOnDay.length === 0 && (
-                                                                    <div className="text-lg tracking-widest drop-shadow-sm select-none my-1">
-                                                                        {(avail.bosses || []).map(bId => bosses.find(x => x.id === bId)?.icon).join('') || <span className="font-bold text-red-500 text-sm tracking-normal">V</span>}
+                                                                    <div className="text-lg drop-shadow-sm select-none my-1 flex flex-wrap justify-center gap-2">
+                                                                        {(avail.bosses || []).map(bId => {
+                                                                            const b = bosses.find(x => x.id === bId);
+                                                                            const count = avail.bossCounts?.[bId] || 1;
+                                                                            if (!b) return null;
+                                                                            return (
+                                                                                <span key={b.id} className="relative inline-flex items-center">
+                                                                                    <span>{b.icon}</span>
+                                                                                    {count > 1 && (
+                                                                                        <span className="absolute -bottom-2 -right-2 text-[10px] font-black z-10" style={{color: b.color, textShadow: '1px 1px 0px #fff, -1px -1px 0px #fff, -1px 1px 0px #fff, 1px -1px 0px #fff'}}>
+                                                                                            x{count}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </span>
+                                                                            );
+                                                                        })}
+                                                                        {!(avail.bosses && avail.bosses.length > 0) && <span className="font-bold text-red-500 text-sm tracking-normal">V</span>}
                                                                     </div>
                                                                 )}
 
@@ -1202,7 +1261,7 @@
                                     <button onClick={() => {
                                         const newAvail = {};
                                         characters.forEach(c => {
-                                            newAvail[c.id] = { days: Array(7).fill(false), bosses: [], note: '' };
+                                            newAvail[c.id] = { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
                                         });
                                         setAvailability(newAvail); // 自動同步至雲端
                                         setGroups([]);             // 自動同步至雲端
