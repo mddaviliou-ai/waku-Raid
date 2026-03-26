@@ -528,6 +528,8 @@
 
             // --- 元件：報名總表 ---
             const AvailabilityMatrix = ({ onOpenCreateModal }) => {
+                const [sortMode, setSortMode] = useState('default'); // 新增：排序狀態管理
+
                 const assignCharToGroup = (charId, groupId) => {
                     if (!groupId) return;
                     const group = groups.find(g => g.id === groupId);
@@ -561,6 +563,25 @@
                     setGroups(newGroups);
                 };
 
+                // 新增：處理名單動態排序的邏輯 (按筆畫、職業、等級)
+                const sortedCharacters = useMemo(() => {
+                    let sorted = [...characters];
+                    if (sortMode === 'name') {
+                        // 依照名稱筆畫排序 (繁體中文語系)
+                        sorted.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
+                    } else if (sortMode === 'job') {
+                        // 依照相同職業名稱排序
+                        sorted.sort((a, b) => a.job.localeCompare(b.job, 'zh-TW'));
+                    } else if (sortMode === 'levelDesc') {
+                        // 等級：高到低
+                        sorted.sort((a, b) => b.level - a.level);
+                    } else if (sortMode === 'levelAsc') {
+                        // 等級：低到高
+                        sorted.sort((a, b) => a.level - b.level);
+                    }
+                    return sorted; // 若為 default 則保持原註冊順序
+                }, [characters, sortMode]);
+
                 return (
                     <div className="bg-white p-6 rounded-lg shadow overflow-x-auto">
                         <div className="flex justify-between items-center mb-4">
@@ -569,8 +590,38 @@
                         <table className="w-full border-collapse text-sm text-left whitespace-nowrap">
                             <thead>
                                 <tr className="bg-orange-100 border-b-2 border-orange-300">
-                                    <th className="p-2 border">角色名稱</th>
-                                    <th className="p-2 border">職業</th>
+                                    <th className="p-2 border min-w-[140px]">
+                                        <div className="flex items-center justify-between">
+                                            <span>角色名稱</span>
+                                            {/* 名稱排序下拉選單 */}
+                                            <select 
+                                                className="bg-white border border-orange-200 text-orange-800 text-[11px] rounded outline-none cursor-pointer ml-1 p-0.5 shadow-sm focus:ring-1 focus:ring-orange-400"
+                                                value={sortMode === 'name' ? sortMode : 'default'}
+                                                onChange={(e) => setSortMode(e.target.value)}
+                                                title="選擇排序方式"
+                                            >
+                                                <option value="default">預設順序</option>
+                                                <option value="name">按筆畫排序</option>
+                                            </select>
+                                        </div>
+                                    </th>
+                                    <th className="p-2 border min-w-[140px]">
+                                        <div className="flex items-center justify-between">
+                                            <span>職業</span>
+                                            {/* 職業與等級排序下拉選單 */}
+                                            <select 
+                                                className="bg-white border border-orange-200 text-orange-800 text-[11px] rounded outline-none cursor-pointer ml-1 p-0.5 shadow-sm focus:ring-1 focus:ring-orange-400"
+                                                value={['job', 'levelDesc', 'levelAsc'].includes(sortMode) ? sortMode : 'default'}
+                                                onChange={(e) => setSortMode(e.target.value)}
+                                                title="選擇排序方式"
+                                            >
+                                                <option value="default">預設順序</option>
+                                                <option value="job">同職業排序</option>
+                                                <option value="levelDesc">等級高到低</option>
+                                                <option value="levelAsc">等級低到高</option>
+                                            </select>
+                                        </div>
+                                    </th>
                                     <th className="p-2 border w-1/4">報名的王團</th>
                                     <th className="p-2 border w-1/5">備註</th>
                                     {days.map((day, i) => (
@@ -591,7 +642,8 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {characters.map(char => {
+                                {/* 替換：將原本的 characters.map 改為已經排好序的 sortedCharacters.map */}
+                                {sortedCharacters.map(char => {
                                     const avail = availability[char.id] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
                                     if(!avail.days.some(d => d)) return null; 
 
