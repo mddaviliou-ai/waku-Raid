@@ -43,6 +43,11 @@
 
         const { useState, useEffect, useMemo } = React;
 
+        // 安全的 LocalStorage 存取 (防止 Iframe 阻擋導致白畫面)
+        const getLocal = (key) => { try { return localStorage.getItem(key); } catch(e) { return null; } };
+        const setLocal = (key, val) => { try { localStorage.setItem(key, val); } catch(e) {} };
+        const removeLocal = (key) => { try { localStorage.removeItem(key); } catch(e) {} };
+
         // --- 初始化 Firebase 環境 ---
         let db, auth, appId;
         
@@ -118,7 +123,7 @@
         const App = () => {
             // --- 深色模式管理 ---
             const [darkMode, setDarkMode] = useState(() => {
-                const saved = localStorage.getItem('waku-raid-darkmode');
+                const saved = getLocal('waku-raid-darkmode');
                 return saved === 'true';
             });
 
@@ -128,7 +133,7 @@
                 } else {
                     document.documentElement.classList.remove('dark');
                 }
-                localStorage.setItem('waku-raid-darkmode', darkMode);
+                setLocal('waku-raid-darkmode', darkMode);
             }, [darkMode]);
 
             // --- 雲端同步與授權機制 ---
@@ -156,22 +161,22 @@
             };
 
             const [bosses, _setBosses] = useState(initialBosses);
-            const setBosses = (val) => { _setBosses(val); updateCloud('bosses', val); };
+            const setBosses = (val) => { _setBosses(val || []); updateCloud('bosses', val || []); };
 
             const [jobCategories, _setJobCategories] = useState(initialJobCategories);
-            const setJobCategories = (val) => { _setJobCategories(val); updateCloud('jobCategories', val); };
+            const setJobCategories = (val) => { _setJobCategories(val || []); updateCloud('jobCategories', val || []); };
 
             const [accounts, _setAccounts] = useState(initialAccounts);
-            const setAccounts = (val) => { _setAccounts(val); updateCloud('accounts', val); };
+            const setAccounts = (val) => { _setAccounts(val || []); updateCloud('accounts', val || []); };
 
             const [characters, _setCharacters] = useState(initialCharacters);
-            const setCharacters = (val) => { _setCharacters(val); updateCloud('characters', val); };
+            const setCharacters = (val) => { _setCharacters(val || []); updateCloud('characters', val || []); };
 
             const [availability, _setAvailability] = useState(initialAvailability);
-            const setAvailability = (val) => { _setAvailability(val); updateCloud('availability', val); };
+            const setAvailability = (val) => { _setAvailability(val || {}); updateCloud('availability', val || {}); };
 
             const [groups, _setGroups] = useState(initialGroups);
-            const setGroups = (val) => { _setGroups(val); updateCloud('groups', val); };
+            const setGroups = (val) => { _setGroups(val || []); updateCloud('groups', val || []); };
 
             const [weekStartDate, _setWeekStartDate] = useState(new Date().toISOString().split('T')[0]); 
             const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
@@ -185,12 +190,12 @@
                     // 全面防護網：加上 || 預設值，避免雲端資料欄位遺失導致白畫面
                     if (snap.exists()) {
                         const data = snap.data();
-                        _setBosses(data.bosses || initialBosses);
-                        _setJobCategories(data.jobCategories || initialJobCategories);
-                        _setAccounts(data.accounts || initialAccounts);
-                        _setCharacters(data.characters || initialCharacters);
-                        _setAvailability(data.availability || initialAvailability);
-                        _setGroups(data.groups || initialGroups);
+                        _setBosses(data.bosses || initialBosses || []);
+                        _setJobCategories(data.jobCategories || initialJobCategories || []);
+                        _setAccounts(data.accounts || initialAccounts || []);
+                        _setCharacters(data.characters || initialCharacters || []);
+                        _setAvailability(data.availability || initialAvailability || {});
+                        _setGroups(data.groups || initialGroups || []);
                         _setWeekStartDate(data.weekStartDate || new Date().toISOString().split('T')[0]);
                     } else {
                         setDoc(docRef, { bosses, jobCategories, accounts, characters, availability, groups, weekStartDate });
@@ -211,19 +216,19 @@
                 });
             }, [weekStartDate]);
             
-            const [loggedInId, setLoggedInId] = useState(() => localStorage.getItem('waku-raid-loggedInId') || null);
+            const [loggedInId, setLoggedInId] = useState(() => getLocal('waku-raid-loggedInId') || null);
             const currentAccount = (accounts || []).find(a => a.id === loggedInId) || null;
             const [activeTab, setActiveTab] = useState('my-schedule');
 
             const handleLogin = (id) => {
                 setLoggedInId(id);
-                localStorage.setItem('waku-raid-loggedInId', id);
+                setLocal('waku-raid-loggedInId', id);
                 setActiveTab('my-schedule'); 
             };
 
             const handleLogout = () => {
                 setLoggedInId(null);
-                localStorage.removeItem('waku-raid-loggedInId');
+                removeLocal('waku-raid-loggedInId');
             };
 
             const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -350,7 +355,7 @@
                 const [loginName, setLoginName] = useState('');
                 const [passcode, setPasscode] = useState('');
                 const [error, setError] = useState('');
-                const [rememberMe, setRememberMe] = useState(() => localStorage.getItem('waku-raid-remember') === 'true');
+                const [rememberMe, setRememberMe] = useState(() => getLocal('waku-raid-remember') === 'true');
                 
                 // 註冊相關狀態
                 const [isRegisterOpen, setIsRegisterOpen] = useState(false);
@@ -359,12 +364,14 @@
 
                 // 彩蛋：劍點擊次數重置
                 const [swordClicks, setSwordClicks] = useState(0);
+                const [isEasterEggModalOpen, setIsEasterEggModalOpen] = useState(false);
+                const [easterEggPwd, setEasterEggPwd] = useState('');
 
                 // 畫面載入時自動帶入記住的帳號密碼
                 useEffect(() => {
                     if (rememberMe) {
-                        const savedName = localStorage.getItem('waku-raid-saved-name');
-                        const savedPwd = localStorage.getItem('waku-raid-saved-pwd');
+                        const savedName = getLocal('waku-raid-saved-name');
+                        const savedPwd = getLocal('waku-raid-saved-pwd');
                         if (savedName) setLoginName(savedName);
                         if (savedPwd) setPasscode(savedPwd);
                     }
@@ -382,22 +389,25 @@
                     const newCount = swordClicks + 1;
                     setSwordClicks(newCount);
                     if (newCount >= 3) {
-                        const pwd = window.prompt("⚠️ 系統重置警告\n請輸入最高管理員密碼以清空並重置所有資料：");
-                        if (pwd === "admin") {
-                            forceResetAccounts();
-                        } else if (pwd !== null) {
-                            alert("密碼錯誤，重置取消。");
-                        }
+                        setIsEasterEggModalOpen(true);
                         setSwordClicks(0);
                     }
                 };
-
-                const forceResetAccounts = () => {
-                    setAccounts(initialAccounts);
-                    setCharacters(initialCharacters);
-                    setAvailability(initialAvailability);
-                    setGroups(initialGroups);
-                    setError('✅ 系統已重置為最新乾淨狀態！請重新登入。');
+                
+                const confirmEasterEggReset = () => {
+                    if (easterEggPwd === "admin") {
+                        setAccounts(initialAccounts);
+                        setCharacters(initialCharacters);
+                        setAvailability(initialAvailability);
+                        setGroups(initialGroups);
+                        setError('✅ 系統已重置為最新乾淨狀態！請重新登入。');
+                        setIsEasterEggModalOpen(false);
+                        setEasterEggPwd('');
+                    } else {
+                        setError('❌ 重置密碼錯誤。');
+                        setIsEasterEggModalOpen(false);
+                        setEasterEggPwd('');
+                    }
                 };
 
                 const doLogin = () => {
@@ -417,13 +427,13 @@
                     if (String(passcode) === correctPasscode) {
                         // 登入成功：處理記住密碼邏輯
                         if (rememberMe) {
-                            localStorage.setItem('waku-raid-remember', 'true');
-                            localStorage.setItem('waku-raid-saved-name', (loginName || '').trim());
-                            localStorage.setItem('waku-raid-saved-pwd', passcode);
+                            setLocal('waku-raid-remember', 'true');
+                            setLocal('waku-raid-saved-name', (loginName || '').trim());
+                            setLocal('waku-raid-saved-pwd', passcode);
                         } else {
-                            localStorage.setItem('waku-raid-remember', 'false');
-                            localStorage.removeItem('waku-raid-saved-name');
-                            localStorage.removeItem('waku-raid-saved-pwd');
+                            setLocal('waku-raid-remember', 'false');
+                            removeLocal('waku-raid-saved-name');
+                            removeLocal('waku-raid-saved-pwd');
                         }
                         handleLogin(acc.id);
                     } else {
@@ -546,6 +556,27 @@
                                     <div className="mt-6 flex justify-end space-x-3">
                                         <button onClick={() => setIsRegisterOpen(false)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                         <button onClick={handleRegister} className="px-5 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow transition-colors">確認註冊</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 彩蛋：系統重置 Modal */}
+                        {isEasterEggModalOpen && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500 transition-colors">
+                                    <h2 className="text-xl font-black mb-4 flex items-center text-red-600 dark:text-red-400">⚠️ 系統重置警告</h2>
+                                    <p className="mb-4 text-sm text-gray-700 dark:text-gray-300">請輸入最高管理員密碼以清空並重置所有資料：</p>
+                                    <input 
+                                        type="password" 
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-red-500 mb-6" 
+                                        value={easterEggPwd} 
+                                        onChange={e => setEasterEggPwd(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && confirmEasterEggReset()}
+                                    />
+                                    <div className="flex justify-end space-x-3">
+                                        <button onClick={() => { setIsEasterEggModalOpen(false); setEasterEggPwd(''); }} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
+                                        <button onClick={confirmEasterEggReset} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認重置</button>
                                     </div>
                                 </div>
                             </div>
