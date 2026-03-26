@@ -692,7 +692,7 @@
                     return sorted; 
                 }, [characters, sortMode, jobCategories]);
 
-                // 新增：處理分頁過濾邏輯
+                // 處理分頁過濾邏輯
                 const displayCharacters = useMemo(() => {
                     return sortedCharacters.filter(char => {
                         const avail = availability[char.id];
@@ -797,6 +797,9 @@
                             <tbody>
                                 {displayCharacters.map(char => {
                                     const avail = availability[char.id];
+                                    
+                                    // 取得該帳號所有角色的 ID (用來做跨角色的防呆提示)
+                                    const sameAccountCharIds = characters.filter(c => c.accountId === char.accountId).map(c => c.id);
 
                                     return (
                                         <tr key={char.id} className="hover:bg-gray-50 border-b">
@@ -825,13 +828,22 @@
                                             {avail.days.map((isAvail, dayIndex) => {
                                                 const charGroupsOnDay = groups.filter(g => g.dayIndex === dayIndex && (g.members.includes(char.id) || g.reserves.includes(char.id)));
                                                 
-                                                // 過濾快速指派選單，只顯示有報名且「剩餘次數大於0」的王團
+                                                // 【同帳號跨角色防呆】：找出該「帳號」這天有沒有排其他的團
+                                                const accountGroupsOnDay = groups.filter(g => 
+                                                    g.dayIndex === dayIndex && 
+                                                    (g.members.some(m => sameAccountCharIds.includes(m)) || g.reserves.some(m => sameAccountCharIds.includes(m)))
+                                                );
+                                                
+                                                // 過濾快速指派選單
                                                 const availableGroupsOnDay = groups.filter(g => {
                                                     if (g.dayIndex !== dayIndex) return false;
                                                     if (g.members.includes(char.id) || g.reserves.includes(char.id)) return false;
                                                     
                                                     const bId = g.bossId;
                                                     if (!(avail.bosses || []).includes(bId)) return false;
+                                                    
+                                                    // 如果有選擇王團分頁，不顯示其他王團的快速指派
+                                                    if (selectedBossTab !== 'all' && bId !== selectedBossTab) return false;
                                                     
                                                     const totalCount = parseInt(avail.bossCounts?.[bId]) || 1;
                                                     const assignedCount = groups.filter(grp => grp.bossId === bId && (grp.members.includes(char.id) || grp.reserves.includes(char.id))).length;
@@ -848,9 +860,18 @@
                                                                 {charGroupsOnDay.map(g => {
                                                                     const b = bosses.find(x => x.id === g.bossId);
                                                                     const tagColor = b ? b.color : '#3b82f6';
+                                                                    
+                                                                    // 如果這個帳號在這天還有被排入「其他」團，則顯示衝堂警告
+                                                                    const conflictGroups = accountGroupsOnDay.filter(ag => ag.id !== g.id);
+                                                                    const showWarn = conflictGroups.length > 0;
+                                                                    const warnTitle = showWarn ? `⚠️ 與 ${conflictGroups.map(ag => ag.name).join(', ')} 衝堂` : g.name;
+
                                                                     return (
                                                                         <div key={g.id} style={{ borderColor: tagColor, color: tagColor }} className="bg-white text-[11px] px-1 py-0.5 rounded flex items-center justify-between w-full shadow-sm border font-bold mb-1">
-                                                                            <span className="truncate flex-1 text-left" title={g.name}>{g.name}</span>
+                                                                            <span className="truncate flex-1 text-left flex items-center" title={warnTitle}>
+                                                                                {showWarn && <span className="text-orange-500 mr-0.5 text-[10px]">⚠️</span>}
+                                                                                {g.name}
+                                                                            </span>
                                                                             {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
                                                                                 <button onClick={() => removeCharFromGroup(char.id, g.id)} className="hover:opacity-70 ml-1 font-black px-1" style={{ color: tagColor }}>×</button>
                                                                             )}
@@ -864,21 +885,20 @@
                                                                         {(avail.bosses || []).map(bId => {
                                                                             const b = bosses.find(x => x.id === bId);
                                                                             if (!b) return null;
+                                                                            // 如果正在使用分頁過濾，只顯示該分頁的王團圖示
+                                                                            if (selectedBossTab !== 'all' && b.id !== selectedBossTab) return null;
                                                                             
-                                                                            // 精確計算：將場次轉為數字，並扣除所有日子中已被指派的總次數
                                                                             const totalCount = parseInt(avail.bossCounts?.[bId]) || 1;
                                                                             const assignedCount = groups.filter(g => g.bossId === bId && (g.members.includes(char.id) || g.reserves.includes(char.id))).length;
                                                                             const remainingCount = Math.max(0, totalCount - assignedCount);
 
                                                                             if (remainingCount <= 0) {
-                                                                                // 次數用盡：顯示變灰防呆
                                                                                 return (
                                                                                     <span key={b.id} className="relative inline-flex items-center grayscale opacity-40" title="排班次數已滿">
                                                                                         <span>{b.icon}</span>
                                                                                     </span>
                                                                                 );
                                                                             } else {
-                                                                                // 還有剩餘次數：顯示正常圖案與剩餘場次(若總場次>1)
                                                                                 return (
                                                                                     <span key={b.id} className="relative inline-flex items-center" title={`剩餘可排: ${remainingCount} 場`}>
                                                                                         <span>{b.icon}</span>
@@ -904,11 +924,16 @@
                                                                             title="直接指派到王團"
                                                                         >
                                                                             <option value="" disabled>+ 快速指派</option>
-                                                                            {availableGroupsOnDay.map(g => (
-                                                                                <option key={g.id} value={g.id}>
-                                                                                    {g.name}
-                                                                                </option>
-                                                                            ))}
+                                                                            {availableGroupsOnDay.map(g => {
+                                                                                // 檢查快速指派選單是否會造成同帳號衝堂
+                                                                                const conflictNames = accountGroupsOnDay.filter(ag => ag.id !== g.id).map(ag => ag.name);
+                                                                                const warnText = conflictNames.length > 0 ? ` (⚠️已排: ${conflictNames.join(', ')})` : '';
+                                                                                return (
+                                                                                    <option key={g.id} value={g.id}>
+                                                                                        {g.name}{warnText}
+                                                                                    </option>
+                                                                                )
+                                                                            })}
                                                                         </select>
                                                                     ) : (
                                                                         charGroupsOnDay.length === 0 && !groups.some(g => g.dayIndex === dayIndex) && (
@@ -1015,7 +1040,6 @@
                                                         <thead>
                                                             <tr className="bg-gray-100">
                                                                 <th className="p-2 text-center w-10 border text-gray-600">#</th>
-                                                                {/* 修正：移除表頭錯誤的 (⚠️衝堂) 常駐文字 */}
                                                                 <th className="p-2 text-left border w-2/5">角色名稱</th>
                                                                 <th className="p-2 text-center border w-1/4">職業Lv.</th>
                                                                 <th className="p-2 text-left border">報名備註</th>
