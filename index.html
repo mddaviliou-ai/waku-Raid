@@ -997,6 +997,9 @@
                                                                                         const eligible = [];
                                                                                         const others = [];
                                                                                         characters.forEach(c => {
+                                                                                            // 【新增防呆】如果這個角色已經在這個隊伍的其他格子裡，就直接隱藏不讓他重複選
+                                                                                            if (group.members.includes(c.id) && c.id !== memberId) return;
+
                                                                                             const cAvail = availability[c.id];
                                                                                             const isDayChecked = cAvail && cAvail.days[group.dayIndex];
                                                                                             const isBossChecked = cAvail && cAvail.bosses && cAvail.bosses.includes(group.bossId);
