@@ -402,7 +402,7 @@
 
                 const doLogin = () => {
                     // 防呆：忽略大小寫與前後空白進行比對
-                    const acc = (accounts || []).find(a => (a.playerName || '').toLowerCase() === loginName.trim().toLowerCase());
+                    const acc = (accounts || []).find(a => (a.playerName || '').toLowerCase() === (loginName || '').trim().toLowerCase());
 
                     if (!acc) {
                         setError('找不到此帳號，請確認名稱是否正確或前往註冊！');
@@ -418,7 +418,7 @@
                         // 登入成功：處理記住密碼邏輯
                         if (rememberMe) {
                             localStorage.setItem('waku-raid-remember', 'true');
-                            localStorage.setItem('waku-raid-saved-name', loginName.trim());
+                            localStorage.setItem('waku-raid-saved-name', (loginName || '').trim());
                             localStorage.setItem('waku-raid-saved-pwd', passcode);
                         } else {
                             localStorage.setItem('waku-raid-remember', 'false');
@@ -432,17 +432,18 @@
                 };
 
                 const handleRegister = () => {
-                    if (!regName.trim()) {
+                    const cleanRegName = (regName || '').trim();
+                    if (!cleanRegName) {
                         setError('請填寫 ID: DC名稱！');
                         return;
                     }
-                    if ((accounts || []).some(a => (a.playerName || '').toLowerCase() === regName.trim().toLowerCase())) {
+                    if ((accounts || []).some(a => (a.playerName || '').toLowerCase() === cleanRegName.toLowerCase())) {
                         setError('此名稱已被註冊！');
                         return;
                     }
 
                     // 密碼安全防呆限制
-                    let finalPasscode = regPasscode.trim();
+                    let finalPasscode = (regPasscode || '').trim();
                     if (finalPasscode !== '') {
                         if (!/^[a-zA-Z0-9]{4,8}$/.test(finalPasscode)) {
                             setError('密碼格式錯誤！只能使用英文與數字，且長度需為 4 到 8 碼。');
@@ -455,7 +456,7 @@
                     const newAccId = 'a_' + Date.now();
                     const newAcc = {
                         id: newAccId,
-                        playerName: regName.trim(),
+                        playerName: cleanRegName,
                         role: 'member',
                         passcode: finalPasscode
                     };
