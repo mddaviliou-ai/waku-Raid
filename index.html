@@ -35,7 +35,6 @@
         let db, auth, appId;
         
         // ⚠️【實際上線修改區】⚠️
-        // 當您要把這個網頁放到 Netlify 發布時，請把 null 替換成您在 Firebase 取得的 Config (不要引號)
         const myFirebaseConfig = {
           apiKey: "AIzaSyCJ5fCwLV9RRDq9EP8ptxtr2ULGlucM7p0",
           authDomain: "waku-raid.firebaseapp.com",
@@ -47,7 +46,6 @@
         };
 
         try {
-            // 這裡保留了預覽測試環境的相容性，如果您填了 myFirebaseConfig 就會優先使用您專屬的資料庫！
             const envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
             const finalConfig = myFirebaseConfig || envConfig;
 
@@ -55,7 +53,6 @@
                 const app = initializeApp(finalConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
-                // 使用自訂資料庫時，給予一個專屬的 appId 路徑
                 appId = (typeof __app_id !== 'undefined' && !myFirebaseConfig) ? __app_id : 'waku-raid-custom-app';
             }
         } catch (e) {
@@ -63,72 +60,61 @@
         }
 
         // --- 模擬資料庫 ---
-        // 0. 王團種類 
         const initialBosses = [
             { id: 'b_zakum', name: '殘暴炎魔', icon: '🔥', color: '#ef4444' },
             { id: 'b_pap_n', name: '拉圖斯(普通)', icon: '⏰', color: '#3b82f6' },
             { id: 'b_pap_h', name: '拉圖斯(困難)', icon: '😈', color: '#8b5cf6' }
         ];
 
-        // 1. 玩家帳號 (新增 passcode 密碼欄位)
+        // 1. 玩家帳號 (更新管理員與副管名稱)
         const initialAccounts = [
-            { id: 'a1', playerName: '熱狗(玩家)', role: 'member', passcode: '1234' },
-            { id: 'a2', playerName: '阿默(玩家)', role: 'member', passcode: '1234' },
-            { id: 'a3', playerName: '雞柳(玩家)', role: 'admin', passcode: 'admin' },
-            { id: 'a4', playerName: '六萬六(玩家)', role: 'subadmin', passcode: 'admin' }
+            { id: 'a1', playerName: '伊爾參寺', role: 'admin', passcode: 'admin' },
+            { id: 'a2', playerName: '熱狗蛋蛋', role: 'subadmin', passcode: 'admin' },
+            { id: 'a3', playerName: '阿默獸', role: 'member', passcode: '1234' },
+            { id: 'a4', playerName: '耶穌雞柳', role: 'member', passcode: '1234' }
         ];
 
-        // 2. 職業分類 (預建所有三轉/四轉職業與顏色)
         const initialJobCategories = [
-            // 劍士系 (紅色)
             { id: 'jc_w_1', group: '劍士系', name: '龍騎士', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
             { id: 'jc_w_2', group: '劍士系', name: '黑騎士', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
             { id: 'jc_w_3', group: '劍士系', name: '十字軍', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
             { id: 'jc_w_4', group: '劍士系', name: '英雄', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
             { id: 'jc_w_5', group: '劍士系', name: '騎士', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
             { id: 'jc_w_6', group: '劍士系', name: '聖騎士', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
-            // 法師系 (藍色)
             { id: 'jc_m_1', group: '法師系', name: '冰雷', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
             { id: 'jc_m_2', group: '法師系', name: '冰雷大魔導', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
             { id: 'jc_m_3', group: '法師系', name: '火毒', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
             { id: 'jc_m_4', group: '法師系', name: '火毒大魔導', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
             { id: 'jc_m_5', group: '法師系', name: '祭司', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
             { id: 'jc_m_6', group: '法師系', name: '主教', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
-            // 弓箭手 (綠色)
             { id: 'jc_b_1', group: '弓箭手', name: '遊俠', bgColor: '#dcfce7', textColor: '#166534', borderColor: '#86efac' },
             { id: 'jc_b_2', group: '弓箭手', name: '箭神', bgColor: '#dcfce7', textColor: '#166534', borderColor: '#86efac' },
             { id: 'jc_b_3', group: '弓箭手', name: '狙擊手', bgColor: '#dcfce7', textColor: '#166534', borderColor: '#86efac' },
             { id: 'jc_b_4', group: '弓箭手', name: '神射手', bgColor: '#dcfce7', textColor: '#166534', borderColor: '#86efac' },
-            // 盜賊系 (紫色)
             { id: 'jc_t_1', group: '盜賊系', name: '神偷', bgColor: '#f3e8ff', textColor: '#6b21a8', borderColor: '#d8b4fe' },
             { id: 'jc_t_2', group: '盜賊系', name: '暗影神偷', bgColor: '#f3e8ff', textColor: '#6b21a8', borderColor: '#d8b4fe' },
             { id: 'jc_t_3', group: '盜賊系', name: '暗殺者', bgColor: '#f3e8ff', textColor: '#6b21a8', borderColor: '#d8b4fe' },
             { id: 'jc_t_4', group: '盜賊系', name: '夜使者', bgColor: '#f3e8ff', textColor: '#6b21a8', borderColor: '#d8b4fe' },
-            // 海盜系 (橘色)
             { id: 'jc_p_1', group: '海盜系', name: '格鬥家', bgColor: '#ffedd5', textColor: '#9a3412', borderColor: '#fdba74' },
             { id: 'jc_p_2', group: '海盜系', name: '拳霸', bgColor: '#ffedd5', textColor: '#9a3412', borderColor: '#fdba74' },
             { id: 'jc_p_3', group: '海盜系', name: '神槍手', bgColor: '#ffedd5', textColor: '#9a3412', borderColor: '#fdba74' },
             { id: 'jc_p_4', group: '海盜系', name: '槍神', bgColor: '#ffedd5', textColor: '#9a3412', borderColor: '#fdba74' }
         ];
 
-        // 3. 遊戲角色 
+        // 3. 遊戲角色 (跟隨新帳號更新)
         const initialCharacters = [
-            { id: 'c1', accountId: 'a1', name: '熱狗蛋蛋', job: '主教', jobTypeId: 'jc_m_6', level: 250 },
-            { id: 'c1_2', accountId: 'a1', name: '熱狗小號', job: '神射手', jobTypeId: 'jc_b_4', level: 230 },
-            { id: 'c2', accountId: 'a2', name: '阿默獸', job: '暗影神偷', jobTypeId: 'jc_t_2', level: 245 },
-            { id: 'c3', accountId: 'a3', name: '耶穌雞柳', job: '英雄', jobTypeId: 'jc_w_4', level: 260 },
-            { id: 'c4', accountId: 'a4', name: '六萬六的男人', job: '英雄', jobTypeId: 'jc_w_4', level: 230 },
-            { id: 'c5', accountId: 'a4', name: '六萬六分身', job: '冰雷大魔導', jobTypeId: 'jc_m_2', level: 220 }
+            { id: 'c1', accountId: 'a1', name: '伊爾參寺', job: '箭神', jobTypeId: 'jc_b_2', level: 250 },
+            { id: 'c2', accountId: 'a2', name: '熱狗蛋蛋', job: '主教', jobTypeId: 'jc_m_6', level: 250 },
+            { id: 'c3', accountId: 'a3', name: '阿默獸', job: '暗影神偷', jobTypeId: 'jc_t_2', level: 245 },
+            { id: 'c4', accountId: 'a4', name: '耶穌雞柳', job: '英雄', jobTypeId: 'jc_w_4', level: 260 }
         ];
 
         // 4. 報名狀態 
         const initialAvailability = {
-            'c1': { days: [false, true, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_n', 'b_pap_h'], note: '' },
-            'c1_2': { days: [false, false, true, true, false, false, false], bosses: ['b_zakum'], note: '分身只打炎魔' },
-            'c2': { days: [true, true, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_h'], note: '有困拉練習團可+1' },
-            'c3': { days: [true, false, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_h'], note: '平日2200後' },
-            'c4': { days: [true, true, true, true, false, false, false], bosses: ['b_zakum', 'b_pap_n'], note: '平日1800後' },
-            'c5': { days: [false, false, false, false, false, false, false], bosses: [], note: '長大中...' }
+            'c1': { days: [false, true, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_n', 'b_pap_h'], note: '管理員' },
+            'c2': { days: [true, true, true, true, true, true, true], bosses: ['b_zakum'], note: '副管理員' },
+            'c3': { days: [true, true, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_h'], note: '有困拉練習團可+1' },
+            'c4': { days: [true, false, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_h'], note: '平日2200後' }
         };
 
         // 5. 群組狀態 
@@ -158,13 +144,11 @@
                 return () => unsub();
             }, []);
 
-            // 雲端資料更新工具
             const updateCloud = (key, val) => {
                 if (!user || !db) return;
                 setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main'), { [key]: val }, { merge: true });
             };
 
-            // 系統狀態 
             const [bosses, _setBosses] = useState(initialBosses);
             const setBosses = (val) => { _setBosses(val); updateCloud('bosses', val); };
 
@@ -186,7 +170,6 @@
             const [weekStartDate, _setWeekStartDate] = useState(new Date().toISOString().split('T')[0]); 
             const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
 
-            // 即時監聽雲端資料庫變更
             useEffect(() => {
                 if (!user || !db) return;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main');
@@ -217,7 +200,6 @@
                 });
             }, [weekStartDate]);
             
-            // --- 登入系統狀態管理 ---
             const [loggedInId, setLoggedInId] = useState(() => localStorage.getItem('waku-raid-loggedInId') || null);
             const currentAccount = accounts.find(a => a.id === loggedInId) || null;
             const [activeTab, setActiveTab] = useState('my-schedule');
@@ -225,7 +207,6 @@
             const handleLogin = (id) => {
                 setLoggedInId(id);
                 localStorage.setItem('waku-raid-loggedInId', id);
-                // 根據角色設定預設顯示頁籤
                 const acc = accounts.find(a => a.id === id);
                 if (acc && acc.role !== 'member') setActiveTab('matrix');
                 else setActiveTab('my-schedule');
@@ -236,7 +217,6 @@
                 localStorage.removeItem('waku-raid-loggedInId');
             };
 
-            // --- 全域狀態：Modals ---
             const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
             const [newGroup, setNewGroup] = useState({ bossId: '', name: '', dayIndex: 0, time: '' });
 
@@ -245,14 +225,13 @@
             
             const [editCharId, setEditCharId] = useState(null);
             const [charToDelete, setCharToDelete] = useState(null);
-            const [accountToDelete, setAccountToDelete] = useState(null); // 新增帳號刪除狀態
+            const [accountToDelete, setAccountToDelete] = useState(null); 
 
             const [alertMessage, setAlertMessage] = useState('');
             const [groupToDelete, setGroupToDelete] = useState(null);
             
             const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false); 
 
-            // 職業顏色動態渲染輔助函數
             const getJobStyle = (typeId) => {
                 const jc = jobCategories.find(j => j.id === typeId);
                 if (jc) return { backgroundColor: jc.bgColor, color: jc.textColor, border: `1px solid ${jc.borderColor}` };
@@ -351,39 +330,61 @@
                 const [passcode, setPasscode] = useState('');
                 const [error, setError] = useState('');
 
+                // 一鍵重置雲端帳號的功能 (解決雲端舊資料覆蓋新程式碼的問題)
+                const forceResetAccounts = () => {
+                    if(window.confirm('這將會清除雲端舊帳號，並載入最新的伊爾參寺/熱狗蛋蛋設定，確定要執行嗎？')) {
+                        setAccounts(initialAccounts);
+                        setCharacters(initialCharacters);
+                        setAvailability(initialAvailability);
+                        setError('✅ 帳號資料已成功更新！請重新選擇帳號登入。');
+                    }
+                };
+
                 const doLogin = () => {
                     const acc = accounts.find(a => a.id === selectedAcc);
-                    if (acc && acc.passcode === passcode) {
+                    
+                    // 為了相容雲端原本沒有 passcode 的舊資料，加入防呆：若無密碼則預設套用 1234/admin
+                    const correctPasscode = acc.passcode ? String(acc.passcode) : (acc.role === 'member' ? '1234' : 'admin');
+
+                    if (acc && String(passcode) === correctPasscode) {
                         handleLogin(acc.id);
                     } else {
-                        setError('密碼錯誤！請向管理員確認您的登入密碼。');
+                        setError('密碼錯誤！請確認密碼是否正確。(預設：管理員 admin，一般 1234)');
                     }
                 };
 
                 return (
-                    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-                        <div className="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full border-t-8 border-blue-500">
+                    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 relative">
+                        <div className="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full border-t-8 border-blue-500 z-10">
                             <h1 className="text-2xl font-black text-center mb-6 text-gray-800"><span className="text-blue-500">⚔️</span> 公會排班登入</h1>
-                            {error && <div className="bg-red-100 text-red-600 p-3 rounded mb-4 text-sm font-bold border border-red-200">{error}</div>}
+                            {error && <div className={`p-3 rounded mb-4 text-sm font-bold border ${error.includes('✅') ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-600 border-red-200'}`}>{error}</div>}
                             <div className="space-y-5">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1">選擇您的帳號</label>
                                     <select className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 font-medium" value={selectedAcc} onChange={e => setSelectedAcc(e.target.value)}>
+                                        <option value="" disabled>-- 請選擇帳號 --</option>
                                         {accounts.map(a => <option key={a.id} value={a.id}>{a.playerName}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1">輸入登入密碼</label>
-                                    <input type="password" placeholder="預設密碼為 1234" className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" value={passcode} onChange={e => setPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && doLogin()} />
+                                    <input type="password" placeholder="預設: 一般1234 / 管理admin" className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" value={passcode} onChange={e => setPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && doLogin()} />
                                 </div>
                                 <button onClick={doLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition-colors shadow-lg mt-2">登入系統</button>
                             </div>
+                        </div>
+                        
+                        {/* 解決雲端不同步的專屬按鈕 */}
+                        <div className="mt-8 text-center">
+                            <button onClick={forceResetAccounts} className="text-xs text-gray-400 hover:text-gray-600 underline">
+                                🔄 載入最新預設帳號 (清除雲端舊帳號)
+                            </button>
+                            <p className="text-[10px] text-gray-400 mt-1">※ 若下拉選單仍為舊名字，請點擊此按鈕進行強制更新</p>
                         </div>
                     </div>
                 );
             };
 
-            // 如果尚未登入，顯示登入畫面
             if (!currentAccount) {
                 return <LoginScreen />;
             }
