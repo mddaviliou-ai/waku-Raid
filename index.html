@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公會王團報名排班系統</title>
+    <title>Waku突襲報名系統</title>
     
     <!-- 加入南瓜 LOGO 標籤 -->
     <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🎃</text></svg>'>
@@ -85,7 +85,7 @@
 
         // 1. 玩家帳號 
         const initialAccounts = [
-            { id: 'a1', playerName: '伊爾參寺', role: 'admin', passcode: 'admin' },
+            { id: 'a1', playerName: '伊爾參寺', role: 'admin', passcode: 'admin1217' },
             { id: 'a2', playerName: '熱狗蛋蛋', role: 'subadmin', passcode: 'admin' }
         ];
 
@@ -1700,10 +1700,10 @@
                 navItems.push({ id: 'planner', label: '查看成團名單' });
             } else if (currentAccount.role === 'subadmin') {
                 navItems.push({ id: 'matrix', label: '成員報名表' });
-                navItems.push({ id: 'planner', label: '突襲成團' });
+                navItems.push({ id: 'planner', label: '編輯突襲團' });
             } else if (currentAccount.role === 'admin') {
                 navItems.push({ id: 'matrix', label: '成員報名表' });
-                navItems.push({ id: 'planner', label: '突襲成團' });
+                navItems.push({ id: 'planner', label: '編輯突襲團' });
                 navItems.push({ id: 'system', label: '系統與權限管理' });
             }
 
