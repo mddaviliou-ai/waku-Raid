@@ -1469,10 +1469,20 @@
                                         <tr key={acc.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b dark:border-gray-700 transition-colors text-gray-800 dark:text-gray-200">
                                             <td className="p-3 border dark:border-gray-700 font-medium">{acc.playerName}</td>
                                             <td className="p-3 border dark:border-gray-700">
-                                                <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-32 text-center font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-colors" value={acc.passcode || ''} onChange={(e) => {
-                                                    const newAccs = accounts.map(a => a.id === acc.id ? {...a, passcode: e.target.value} : a);
-                                                    setAccounts(newAccs);
-                                                }} />
+                                                <input 
+                                                    type="text" 
+                                                    className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-32 text-center font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-colors" 
+                                                    defaultValue={acc.passcode || ''} 
+                                                    onBlur={(e) => {
+                                                        if (e.target.value !== acc.passcode) {
+                                                            const newAccs = accounts.map(a => a.id === acc.id ? {...a, passcode: e.target.value} : a);
+                                                            setAccounts(newAccs);
+                                                        }
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') e.target.blur();
+                                                    }}
+                                                />
                                             </td>
                                             <td className="p-3 border dark:border-gray-700">
                                                 <select 
