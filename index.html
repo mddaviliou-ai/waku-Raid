@@ -36,7 +36,6 @@
         
         // ⚠️【實際上線修改區】⚠️
         // 當您要把這個網頁放到 Netlify 發布時，請把 null 替換成您在 Firebase 取得的 Config (不要引號)
-        // 範例：const myFirebaseConfig = { apiKey: "AIza...", projectId: "waku-raid...", ... };
         const myFirebaseConfig = {
           apiKey: "AIzaSyCJ5fCwLV9RRDq9EP8ptxtr2ULGlucM7p0",
           authDomain: "waku-raid.firebaseapp.com",
@@ -71,12 +70,12 @@
             { id: 'b_pap_h', name: '拉圖斯(困難)', icon: '😈', color: '#8b5cf6' }
         ];
 
-        // 1. 玩家帳號 
+        // 1. 玩家帳號 (新增 passcode 密碼欄位)
         const initialAccounts = [
-            { id: 'a1', playerName: '熱狗(玩家)', role: 'member' },
-            { id: 'a2', playerName: '阿默(玩家)', role: 'member' },
-            { id: 'a3', playerName: '雞柳(玩家)', role: 'admin' },
-            { id: 'a4', playerName: '六萬六(玩家)', role: 'subadmin' }
+            { id: 'a1', playerName: '熱狗(玩家)', role: 'member', passcode: '1234' },
+            { id: 'a2', playerName: '阿默(玩家)', role: 'member', passcode: '1234' },
+            { id: 'a3', playerName: '雞柳(玩家)', role: 'admin', passcode: 'admin' },
+            { id: 'a4', playerName: '六萬六(玩家)', role: 'subadmin', passcode: 'admin' }
         ];
 
         // 2. 職業分類 (預建所有三轉/四轉職業與顏色)
@@ -112,7 +111,7 @@
             { id: 'jc_p_4', group: '海盜系', name: '槍神', bgColor: '#ffedd5', textColor: '#9a3412', borderColor: '#fdba74' }
         ];
 
-        // 3. 遊戲角色 (對應新的 ID)
+        // 3. 遊戲角色 
         const initialCharacters = [
             { id: 'c1', accountId: 'a1', name: '熱狗蛋蛋', job: '主教', jobTypeId: 'jc_m_6', level: 250 },
             { id: 'c1_2', accountId: 'a1', name: '熱狗小號', job: '神射手', jobTypeId: 'jc_b_4', level: 230 },
@@ -162,11 +161,10 @@
             // 雲端資料更新工具
             const updateCloud = (key, val) => {
                 if (!user || !db) return;
-                // 公用資料庫路徑：依賴 appId 區分，若有自己的 config 就不會跟別人衝突
                 setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main'), { [key]: val }, { merge: true });
             };
 
-            // 系統狀態 (全面掛載雲端自動同步)
+            // 系統狀態 
             const [bosses, _setBosses] = useState(initialBosses);
             const setBosses = (val) => { _setBosses(val); updateCloud('bosses', val); };
 
@@ -185,7 +183,6 @@
             const [groups, _setGroups] = useState(initialGroups);
             const setGroups = (val) => { _setGroups(val); updateCloud('groups', val); };
 
-            // 動態起始日期設定
             const [weekStartDate, _setWeekStartDate] = useState(new Date().toISOString().split('T')[0]); 
             const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
 
@@ -204,14 +201,12 @@
                         if(data.groups) _setGroups(data.groups);
                         if(data.weekStartDate) _setWeekStartDate(data.weekStartDate);
                     } else {
-                        // 若無資料，則以預設資料初始化雲端
                         setDoc(docRef, { bosses, jobCategories, accounts, characters, availability, groups, weekStartDate });
                     }
                 }, (err) => console.error(err));
                 return () => unsub();
             }, [user]);
 
-            // 自動根據設定的「起始日期」往後計算產生 7 天的日子陣列
             const days = useMemo(() => {
                 const start = new Date(weekStartDate);
                 const wdays = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
@@ -222,9 +217,24 @@
                 });
             }, [weekStartDate]);
             
-            // 當前登入帳號
-            const [currentAccount, setCurrentAccount] = useState(accounts[0]); 
+            // --- 登入系統狀態管理 ---
+            const [loggedInId, setLoggedInId] = useState(() => localStorage.getItem('waku-raid-loggedInId') || null);
+            const currentAccount = accounts.find(a => a.id === loggedInId) || null;
             const [activeTab, setActiveTab] = useState('my-schedule');
+
+            const handleLogin = (id) => {
+                setLoggedInId(id);
+                localStorage.setItem('waku-raid-loggedInId', id);
+                // 根據角色設定預設顯示頁籤
+                const acc = accounts.find(a => a.id === id);
+                if (acc && acc.role !== 'member') setActiveTab('matrix');
+                else setActiveTab('my-schedule');
+            };
+
+            const handleLogout = () => {
+                setLoggedInId(null);
+                localStorage.removeItem('waku-raid-loggedInId');
+            };
 
             // --- 全域狀態：Modals ---
             const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -233,14 +243,13 @@
             const [isAddCharModalOpen, setIsAddCharModalOpen] = useState(false);
             const [newChar, setNewChar] = useState({ name: '', job: '', jobTypeId: '', level: 200 });
             
-            // 角色編輯與刪除的狀態
             const [editCharId, setEditCharId] = useState(null);
             const [charToDelete, setCharToDelete] = useState(null);
+            const [accountToDelete, setAccountToDelete] = useState(null); // 新增帳號刪除狀態
 
             const [alertMessage, setAlertMessage] = useState('');
             const [groupToDelete, setGroupToDelete] = useState(null);
             
-            // 換週清空確認 Modal 狀態
             const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false); 
 
             // 職業顏色動態渲染輔助函數
@@ -253,7 +262,6 @@
             const handleOpenCreateModal = (dayIdx = 0) => {
                 const defaultBossId = bosses[0]?.id || '';
                 const defaultBossName = bosses[0]?.name || '';
-                // 自動計算目前該王團已經有幾團，決定預設編號
                 const bossGroupsCount = groups.filter(g => g.bossId === defaultBossId).length;
                 const defaultGroupName = defaultBossId ? `${bossGroupsCount + 1}.${defaultBossName}` : '';
 
@@ -261,7 +269,7 @@
                     bossId: defaultBossId, 
                     name: defaultGroupName, 
                     dayIndex: dayIdx, 
-                    time: '21:30~22:00集合' // 設定預設時間
+                    time: '21:30~22:00集合' 
                 });
                 setIsCreateModalOpen(true);
             };
@@ -283,7 +291,6 @@
                 setIsCreateModalOpen(false);
             };
 
-            // 支援新增與編輯角色
             const handleAddCharacter = () => {
                 if(!newChar.name || !newChar.job || !newChar.jobTypeId) {
                     setAlertMessage('請填寫完整角色名稱並選擇職業');
@@ -291,7 +298,6 @@
                 }
 
                 if (editCharId) {
-                    // 編輯模式
                     setCharacters(characters.map(c => c.id === editCharId ? { 
                         ...c, 
                         name: newChar.name, 
@@ -300,7 +306,6 @@
                         level: parseInt(newChar.level) 
                     } : c));
                 } else {
-                    // 新增模式
                     const newCharId = 'c_' + Date.now();
                     setCharacters([...characters, { 
                         id: newCharId, 
@@ -311,7 +316,6 @@
                         level: parseInt(newChar.level) 
                     }]);
                     
-                    // 幫新角色建立預設的報名空資料
                     setAvailability({
                         ...availability,
                         [newCharId]: { days: Array(7).fill(false), bosses: [], note: '' }
@@ -322,25 +326,18 @@
                 setEditCharId(null);
             };
 
-            // 確認刪除角色邏輯
             const confirmDeleteChar = () => {
                 if (!charToDelete) return;
-                
-                // 1. 從角色清單移除
                 setCharacters(characters.filter(c => c.id !== charToDelete));
-                
-                // 2. 從已排好的王團中清空該角色
                 const newGroups = groups.map(g => ({
                     ...g,
                     members: g.members.map(m => m === charToDelete ? '' : m),
                     reserves: g.reserves.map(m => m === charToDelete ? '' : m)
                 }));
                 setGroups(newGroups);
-                
                 setCharToDelete(null);
             };
 
-            // 將職業分類分組 (供選單使用)
             const groupedJobs = jobCategories.reduce((acc, jc) => {
                 const g = jc.group || '其他';
                 if (!acc[g]) acc[g] = [];
@@ -348,34 +345,48 @@
                 return acc;
             }, {});
 
-            // --- 元件：權限模擬器 ---
-            const RoleSimulator = () => (
-                <div className="bg-gray-800 text-white p-3 flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-4">
-                        <span className="font-bold text-yellow-400">⚙️ 權限測試模擬器</span>
-                        <span>切換登入帳號：</span>
-                        <select 
-                            className="bg-gray-700 text-white p-1 rounded"
-                            value={currentAccount.id}
-                            onChange={(e) => {
-                                const acc = accounts.find(a => a.id === e.target.value);
-                                setCurrentAccount(acc);
-                                if (acc.role === 'member') setActiveTab('my-schedule');
-                                else setActiveTab('matrix');
-                            }}
-                        >
-                            {accounts.map(acc => (
-                                <option key={acc.id} value={acc.id}>
-                                    {acc.playerName} ({acc.role === 'admin' ? '管理員' : acc.role === 'subadmin' ? '副管理員' : '一般會員'})
-                                </option>
-                            ))}
-                        </select>
+            // --- 元件：登入系統畫面 ---
+            const LoginScreen = () => {
+                const [selectedAcc, setSelectedAcc] = useState(accounts[0]?.id || '');
+                const [passcode, setPasscode] = useState('');
+                const [error, setError] = useState('');
+
+                const doLogin = () => {
+                    const acc = accounts.find(a => a.id === selectedAcc);
+                    if (acc && acc.passcode === passcode) {
+                        handleLogin(acc.id);
+                    } else {
+                        setError('密碼錯誤！請向管理員確認您的登入密碼。');
+                    }
+                };
+
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                        <div className="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full border-t-8 border-blue-500">
+                            <h1 className="text-2xl font-black text-center mb-6 text-gray-800"><span className="text-blue-500">⚔️</span> 公會排班登入</h1>
+                            {error && <div className="bg-red-100 text-red-600 p-3 rounded mb-4 text-sm font-bold border border-red-200">{error}</div>}
+                            <div className="space-y-5">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">選擇您的帳號</label>
+                                    <select className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 font-medium" value={selectedAcc} onChange={e => setSelectedAcc(e.target.value)}>
+                                        {accounts.map(a => <option key={a.id} value={a.id}>{a.playerName}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">輸入登入密碼</label>
+                                    <input type="password" placeholder="預設密碼為 1234" className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" value={passcode} onChange={e => setPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && doLogin()} />
+                                </div>
+                                <button onClick={doLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition-colors shadow-lg mt-2">登入系統</button>
+                            </div>
+                        </div>
                     </div>
-                    <div className="text-gray-300">
-                        目前權限：<span className="font-bold text-white">{currentAccount.role.toUpperCase()}</span>
-                    </div>
-                </div>
-            );
+                );
+            };
+
+            // 如果尚未登入，顯示登入畫面
+            if (!currentAccount) {
+                return <LoginScreen />;
+            }
 
             // --- 元件：會員報名頁面 ---
             const MemberSchedule = () => {
@@ -796,10 +807,11 @@
                 const [newBossIcon, setNewBossIcon] = useState('🔥');
                 const [newBossColor, setNewBossColor] = useState('#ef4444');
 
-                // 新增職業類別的狀態
                 const [newJobCatName, setNewJobCatName] = useState('');
                 const [newJobCatBg, setNewJobCatBg] = useState('#dbeafe');
                 const [newJobCatText, setNewJobCatText] = useState('#1e3a8a');
+                
+                const [newAccName, setNewAccName] = useState('');
 
                 const handleAddBoss = () => {
                     if(!newBossName || !newBossIcon) return;
@@ -818,6 +830,12 @@
                         borderColor: newJobCatText 
                     }]);
                     setNewJobCatName('');
+                };
+
+                const handleAddAccount = () => {
+                    if(!newAccName) return;
+                    setAccounts([...accounts, { id: 'a_' + Date.now(), playerName: newAccName, role: 'member', passcode: '1234' }]);
+                    setNewAccName('');
                 };
 
                 return (
@@ -916,12 +934,23 @@
 
                         {/* 帳號權限管理 */}
                         <div className="bg-white p-6 rounded-lg shadow border-t-4 border-blue-500">
-                            <h2 className="text-xl font-bold text-gray-800 mb-4">公會帳號權限管理</h2>
-                            <table className="w-full border-collapse text-sm text-left">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">公會帳號權限與密碼管理</h2>
+                            
+                            <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 p-4 rounded border">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">新玩家名稱</label>
+                                    <input type="text" className="border p-2 rounded w-48" placeholder="例: 瓜董(玩家)" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
+                                </div>
+                                <button onClick={handleAddAccount} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 h-[42px] shadow">新增玩家帳號</button>
+                            </div>
+
+                            <table className="w-full border-collapse text-sm text-left mt-4">
                                 <thead>
                                     <tr className="bg-gray-100 border-b">
                                         <th className="p-3 border">玩家(帳號)名稱</th>
+                                        <th className="p-3 border">登入密碼</th>
                                         <th className="p-3 border">系統權限</th>
+                                        <th className="p-3 border text-center">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -929,19 +958,30 @@
                                         <tr key={acc.id} className="hover:bg-gray-50 border-b">
                                             <td className="p-3 border font-medium">{acc.playerName}</td>
                                             <td className="p-3 border">
+                                                <input type="text" className="border p-1 rounded w-32 text-center font-medium text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none" value={acc.passcode || ''} onChange={(e) => {
+                                                    const newAccs = accounts.map(a => a.id === acc.id ? {...a, passcode: e.target.value} : a);
+                                                    setAccounts(newAccs);
+                                                }} />
+                                            </td>
+                                            <td className="p-3 border">
                                                 <select 
                                                     className="border p-1 rounded bg-white"
                                                     value={acc.role}
                                                     onChange={(e) => {
                                                         const newAccs = accounts.map(a => a.id === acc.id ? {...a, role: e.target.value} : a);
                                                         setAccounts(newAccs);
-                                                        if(currentAccount.id === acc.id) setCurrentAccount({...acc, role: e.target.value});
                                                     }}
                                                 >
                                                     <option value="member">一般會員</option>
                                                     <option value="subadmin">副管理員</option>
                                                     <option value="admin">管理員</option>
                                                 </select>
+                                            </td>
+                                            <td className="p-3 border text-center">
+                                                 <button 
+                                                    className="text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                                                    onClick={() => setAccountToDelete(acc.id)}
+                                                 >刪除</button>
                                             </td>
                                         </tr>
                                     ))}
@@ -968,8 +1008,6 @@
 
             return (
                 <div className="min-h-screen flex flex-col">
-                    <RoleSimulator />
-                    
                     <header className="bg-white shadow-sm border-b">
                         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
                             <h1 className="text-xl font-black text-gray-800 flex items-center">
@@ -980,6 +1018,7 @@
                                     <div className="font-bold text-gray-800">{currentAccount.playerName}</div>
                                     <div className="text-xs text-gray-500">
                                         {currentAccount.role === 'admin' ? '管理員' : currentAccount.role === 'subadmin' ? '副管理員' : '一般會員'}
+                                        <button onClick={handleLogout} className="ml-3 text-red-500 hover:text-red-700 underline font-bold cursor-pointer">登出</button>
                                     </div>
                                 </div>
                                 <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-600 border-2 border-blue-300">
@@ -1147,6 +1186,23 @@
                                 <div className="flex justify-end space-x-3">
                                     <button onClick={() => setCharToDelete(null)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
                                     <button onClick={confirmDeleteChar} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 自訂 Confirm Modal (帳號刪除確認) */}
+                    {accountToDelete && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
+                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500">
+                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600">🚨 刪除帳號確認</h2>
+                                <p className="mb-6 text-gray-700">確定要刪除該玩家帳號嗎？<br/><span className="text-red-500 font-bold">他將無法再登入系統。</span></p>
+                                <div className="flex justify-end space-x-3">
+                                    <button onClick={() => setAccountToDelete(null)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={() => {
+                                        setAccounts(accounts.filter(a => a.id !== accountToDelete));
+                                        setAccountToDelete(null);
+                                    }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
                                 </div>
                             </div>
                         </div>
