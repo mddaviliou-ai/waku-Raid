@@ -59,19 +59,17 @@
             console.error("Firebase 連線初始化失敗", e);
         }
 
-        // --- 模擬資料庫 ---
+        // --- 預設資料庫 ---
         const initialBosses = [
             { id: 'b_zakum', name: '殘暴炎魔', icon: '🔥', color: '#ef4444' },
             { id: 'b_pap_n', name: '拉圖斯(普通)', icon: '⏰', color: '#3b82f6' },
             { id: 'b_pap_h', name: '拉圖斯(困難)', icon: '😈', color: '#8b5cf6' }
         ];
 
-        // 1. 玩家帳號 (更新管理員與副管名稱)
+        // 1. 玩家帳號 (保留管理員方便登入)
         const initialAccounts = [
             { id: 'a1', playerName: '伊爾參寺', role: 'admin', passcode: 'admin' },
-            { id: 'a2', playerName: '熱狗蛋蛋', role: 'subadmin', passcode: 'admin' },
-            { id: 'a3', playerName: '阿默獸', role: 'member', passcode: '1234' },
-            { id: 'a4', playerName: '耶穌雞柳', role: 'member', passcode: '1234' }
+            { id: 'a2', playerName: '熱狗蛋蛋', role: 'subadmin', passcode: 'admin' }
         ];
 
         const initialJobCategories = [
@@ -101,28 +99,14 @@
             { id: 'jc_p_4', group: '海盜系', name: '槍神', bgColor: '#ffedd5', textColor: '#9a3412', borderColor: '#fdba74' }
         ];
 
-        // 3. 遊戲角色 (跟隨新帳號更新)
-        const initialCharacters = [
-            { id: 'c1', accountId: 'a1', name: '伊爾參寺', job: '箭神', jobTypeId: 'jc_b_2', level: 250 },
-            { id: 'c2', accountId: 'a2', name: '熱狗蛋蛋', job: '主教', jobTypeId: 'jc_m_6', level: 250 },
-            { id: 'c3', accountId: 'a3', name: '阿默獸', job: '暗影神偷', jobTypeId: 'jc_t_2', level: 245 },
-            { id: 'c4', accountId: 'a4', name: '耶穌雞柳', job: '英雄', jobTypeId: 'jc_w_4', level: 260 }
-        ];
+        // 3. 遊戲角色 (已清空，等玩家自行建立)
+        const initialCharacters = [];
 
-        // 4. 報名狀態 
-        const initialAvailability = {
-            'c1': { days: [false, true, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_n', 'b_pap_h'], note: '管理員' },
-            'c2': { days: [true, true, true, true, true, true, true], bosses: ['b_zakum'], note: '副管理員' },
-            'c3': { days: [true, true, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_h'], note: '有困拉練習團可+1' },
-            'c4': { days: [true, false, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_h'], note: '平日2200後' }
-        };
+        // 4. 報名狀態 (已清空)
+        const initialAvailability = {};
 
-        // 5. 群組狀態 
-        const initialGroups = [
-            { id: 'g1', bossId: 'b_zakum', name: '1.殘暴炎魔', dayIndex: 1, time: '21:30~22:00集合', members: ['c1', 'c3', 'c4', '', '', ''], reserves: [''] },
-            { id: 'g2', bossId: 'b_pap_h', name: '1.拉圖斯(困難)', dayIndex: 1, time: '21:30~22:00集合', members: ['c2', '', '', '', '', ''], reserves: [''] },
-            { id: 'g3', bossId: 'b_zakum', name: '2.殘暴炎魔', dayIndex: 2, time: '21:30~22:00集合', members: ['', '', '', '', '', ''], reserves: [''] }
-        ];
+        // 5. 群組狀態 (已清空)
+        const initialGroups = [];
 
         const App = () => {
             // --- 雲端同步與授權機制 ---
@@ -207,9 +191,7 @@
             const handleLogin = (id) => {
                 setLoggedInId(id);
                 localStorage.setItem('waku-raid-loggedInId', id);
-                const acc = accounts.find(a => a.id === id);
-                if (acc && acc.role !== 'member') setActiveTab('matrix');
-                else setActiveTab('my-schedule');
+                setActiveTab('my-schedule'); // 統一預設進入「我的報名表」
             };
 
             const handleLogout = () => {
@@ -330,20 +312,19 @@
                 const [passcode, setPasscode] = useState('');
                 const [error, setError] = useState('');
 
-                // 一鍵重置雲端帳號的功能 (解決雲端舊資料覆蓋新程式碼的問題)
+                // 一鍵重置雲端帳號的功能 (包含清除所有幽靈角色與排班)
                 const forceResetAccounts = () => {
-                    if(window.confirm('這將會清除雲端舊帳號，並載入最新的伊爾參寺/熱狗蛋蛋設定，確定要執行嗎？')) {
+                    if(window.confirm('這將會清除雲端舊帳號與舊名單，並載入最新乾淨的初始狀態，確定要執行嗎？')) {
                         setAccounts(initialAccounts);
                         setCharacters(initialCharacters);
                         setAvailability(initialAvailability);
-                        setError('✅ 帳號資料已成功更新！請重新選擇帳號登入。');
+                        setGroups(initialGroups);
+                        setError('✅ 系統已重置為最新乾淨狀態！請重新選擇帳號登入。');
                     }
                 };
 
                 const doLogin = () => {
                     const acc = accounts.find(a => a.id === selectedAcc);
-                    
-                    // 為了相容雲端原本沒有 passcode 的舊資料，加入防呆：若無密碼則預設套用 1234/admin
                     const correctPasscode = acc.passcode ? String(acc.passcode) : (acc.role === 'member' ? '1234' : 'admin');
 
                     if (acc && String(passcode) === correctPasscode) {
@@ -374,7 +355,6 @@
                             </div>
                         </div>
                         
-                        {/* 解決雲端不同步的專屬按鈕 */}
                         <div className="mt-8 text-center">
                             <button onClick={forceResetAccounts} className="text-xs text-gray-400 hover:text-gray-600 underline">
                                 🔄 載入最新預設帳號 (清除雲端舊帳號)
@@ -994,9 +974,11 @@
             };
 
             // 導覽列
-            const navItems = [];
+            const navItems = [
+                { id: 'my-schedule', label: '我的報名表' } // 讓所有人(包含管理員)都可以報名
+            ];
+            
             if (currentAccount.role === 'member') {
-                navItems.push({ id: 'my-schedule', label: '我的報名表' });
                 navItems.push({ id: 'planner', label: '查看王團名單' });
             } else if (currentAccount.role === 'subadmin') {
                 navItems.push({ id: 'matrix', label: '成員報名總表' });
