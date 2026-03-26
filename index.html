@@ -861,8 +861,16 @@
                                                                     const b = bosses.find(x => x.id === g.bossId);
                                                                     const tagColor = b ? b.color : '#3b82f6';
                                                                     
-                                                                    // 如果這個帳號在這天還有被排入「其他」團，則顯示衝堂警告
-                                                                    const conflictGroups = accountGroupsOnDay.filter(ag => ag.id !== g.id);
+                                                                    // 如果這個帳號在這天還有被排入「其他」團（或是同一團被塞了另一隻分身），則顯示衝堂警告
+                                                                    const conflictGroups = accountGroupsOnDay.filter(ag => {
+                                                                        if (ag.id === g.id) {
+                                                                            // 如果是同一個隊伍，檢查有沒有塞入同帳號的「另一隻」角色
+                                                                            return ag.members.some(m => m !== char.id && sameAccountCharIds.includes(m)) || 
+                                                                                   ag.reserves.some(m => m !== char.id && sameAccountCharIds.includes(m));
+                                                                        }
+                                                                        return true; // 只要是別的隊伍就算衝堂
+                                                                    });
+                                                                    
                                                                     const showWarn = conflictGroups.length > 0;
                                                                     const warnTitle = showWarn ? `⚠️ 與 ${conflictGroups.map(ag => ag.name).join(', ')} 衝堂` : g.name;
 
@@ -926,7 +934,7 @@
                                                                             <option value="" disabled>+ 快速指派</option>
                                                                             {availableGroupsOnDay.map(g => {
                                                                                 // 檢查快速指派選單是否會造成同帳號衝堂
-                                                                                const conflictNames = accountGroupsOnDay.filter(ag => ag.id !== g.id).map(ag => ag.name);
+                                                                                const conflictNames = accountGroupsOnDay.map(ag => ag.name);
                                                                                 const warnText = conflictNames.length > 0 ? ` (⚠️已排: ${conflictNames.join(', ')})` : '';
                                                                                 return (
                                                                                     <option key={g.id} value={g.id}>
@@ -965,20 +973,28 @@
                     setGroupToDelete(groupId);
                 };
 
-                const getConflictGroup = (charId, currentGroupId, dayIndex) => {
-                    if (!charId) return null;
+                const getConflictGroupNames = (charId, currentGroupId, dayIndex) => {
+                    if (!charId) return [];
                     const targetChar = characters.find(c => c.id === charId);
-                    if (!targetChar) return null;
+                    if (!targetChar) return [];
 
-                    // 【核心升級】：取得該玩家(帳號)底下的所有角色 ID，用於判斷「同帳號」的衝堂
+                    // 取得該玩家(帳號)底下的所有角色 ID，用於判斷「同帳號跨角色」的衝堂
                     const sameAccountCharIds = characters.filter(c => c.accountId === targetChar.accountId).map(c => c.id);
 
-                    const conflict = groups.find(g => 
-                        g.id !== currentGroupId && 
-                        g.dayIndex === parseInt(dayIndex) && 
-                        (g.members.some(m => sameAccountCharIds.includes(m)) || g.reserves.some(m => sameAccountCharIds.includes(m)))
-                    );
-                    return conflict ? conflict.name : null;
+                    const conflicts = groups.filter(g => {
+                        if (g.dayIndex !== parseInt(dayIndex)) return false;
+                        
+                        if (g.id === currentGroupId) {
+                            // 對於當前的這個隊伍，如果裡面已經塞了同帳號的「另一隻」分身，就算是衝堂
+                            return g.members.some(m => m !== charId && sameAccountCharIds.includes(m)) || 
+                                   g.reserves.some(m => m !== charId && sameAccountCharIds.includes(m));
+                        } else {
+                            // 對於其他隊伍，只要有這個帳號的任何一隻角色，就算是衝堂
+                            return g.members.some(m => sameAccountCharIds.includes(m)) || 
+                                   g.reserves.some(m => sameAccountCharIds.includes(m));
+                        }
+                    });
+                    return conflicts.map(c => c.name);
                 };
 
                 const handleAssign = (groupId, slotType, slotIndex, charId) => {
@@ -1049,10 +1065,11 @@
                                                             {group.members.map((memberId, idx) => {
                                                                 const char = characters.find(c => c.id === memberId);
                                                                 const avail = char ? availability[char.id] : null;
-                                                                const conflictName = getConflictGroup(memberId, group.id, group.dayIndex);
+                                                                
+                                                                // 取得目前格子的衝突資訊
+                                                                const conflictNames = getConflictGroupNames(memberId, group.id, group.dayIndex);
                                                                 
                                                                 let isOverQuota = false;
-                                                                
                                                                 if (memberId && char) {
                                                                     const cAvail = availability[memberId];
                                                                     const isBossChecked = cAvail && cAvail.bosses && cAvail.bosses.includes(group.bossId);
@@ -1063,7 +1080,7 @@
                                                                 }
                                                                 
                                                                 let warnArr = [];
-                                                                if (conflictName) warnArr.push(`衝堂: ${conflictName}`);
+                                                                if (conflictNames.length > 0) warnArr.push(`衝堂: ${conflictNames.join(', ')}`);
                                                                 if (isOverQuota) warnArr.push(`超排/未報名`);
                                                                 
                                                                 const warningText = warnArr.length > 0 ? `(⚠️ ${warnArr.join(', ')})` : '';
@@ -1111,7 +1128,7 @@
                                                                                                     const totalCount = parseInt(cAvail.bossCounts?.[group.bossId]) || 1;
                                                                                                     const assignedCount = groups.filter(grp => grp.bossId === group.bossId && (grp.members.includes(c.id) || grp.reserves.includes(c.id))).length;
                                                                                                     let adjustedAssigned = assignedCount;
-                                                                                                    // 【校正回歸】如果我們正在評估的這個選單格子本來就是選這個人，要把他自己的這個名額吐回去，才能正確計算如果維持不變是否還有資格
+                                                                                                    // 如果目前這個格子本來就是選這個人，要把他自己的這個名額加回去計算
                                                                                                     if (memberId === c.id) {
                                                                                                        adjustedAssigned -= 1;
                                                                                                     }
@@ -1130,9 +1147,9 @@
                                                                                             });
 
                                                                                             const renderOpt = (c, type) => {
-                                                                                                const cConflict = getConflictGroup(c.id, group.id, group.dayIndex);
+                                                                                                const cConflicts = getConflictGroupNames(c.id, group.id, group.dayIndex);
                                                                                                 let tags = [];
-                                                                                                if (cConflict) tags.push(`衝堂: ${cConflict}`);
+                                                                                                if (cConflicts.length > 0) tags.push(`衝堂: ${cConflicts.join(', ')}`);
                                                                                                 if (type === 'quotaFull') tags.push('次數滿');
                                                                                                 
                                                                                                 const cWarn = tags.length > 0 ? ` (⚠️ ${tags.join(', ')})` : '';
