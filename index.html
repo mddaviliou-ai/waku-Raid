@@ -993,15 +993,46 @@
                                                                                     onChange={(e) => handleAssign(group.id, 'members', idx, e.target.value)}
                                                                                 >
                                                                                     <option value="">- 選擇隊員 -</option>
-                                                                                    {characters.map(c => {
-                                                                                        const cConflict = getConflictGroup(c.id, group.id, group.dayIndex);
-                                                                                        const cWarn = cConflict ? `(⚠️已排: ${cConflict})` : '';
+                                                                                    {(() => {
+                                                                                        const eligible = [];
+                                                                                        const others = [];
+                                                                                        characters.forEach(c => {
+                                                                                            const cAvail = availability[c.id];
+                                                                                            const isDayChecked = cAvail && cAvail.days[group.dayIndex];
+                                                                                            const isBossChecked = cAvail && cAvail.bosses && cAvail.bosses.includes(group.bossId);
+                                                                                            
+                                                                                            if (isDayChecked && isBossChecked) {
+                                                                                                eligible.push(c);
+                                                                                            } else {
+                                                                                                others.push(c);
+                                                                                            }
+                                                                                        });
+
+                                                                                        const renderOpt = (c) => {
+                                                                                            const cConflict = getConflictGroup(c.id, group.id, group.dayIndex);
+                                                                                            const cWarn = cConflict ? `(⚠️已排: ${cConflict})` : '';
+                                                                                            return (
+                                                                                                <option key={c.id} value={c.id}>
+                                                                                                    [{c.job}] {c.name} (Lv.{c.level}) {cWarn}
+                                                                                                </option>
+                                                                                            );
+                                                                                        };
+
                                                                                         return (
-                                                                                            <option key={c.id} value={c.id}>
-                                                                                                [{c.job}] {c.name} (Lv.{c.level}) {cWarn}
-                                                                                            </option>
-                                                                                        )
-                                                                                    })}
+                                                                                            <React.Fragment>
+                                                                                                {eligible.length > 0 && (
+                                                                                                    <optgroup label="✅ 符合條件 (當日有報名)">
+                                                                                                        {eligible.map(renderOpt)}
+                                                                                                    </optgroup>
+                                                                                                )}
+                                                                                                {others.length > 0 && (
+                                                                                                    <optgroup label="❌ 未報名 (強制指派)">
+                                                                                                        {others.map(renderOpt)}
+                                                                                                    </optgroup>
+                                                                                                )}
+                                                                                            </React.Fragment>
+                                                                                        );
+                                                                                    })()}
                                                                                 </select>
                                                                             ) : (
                                                                                 <div className="p-1 flex items-center space-x-2">
