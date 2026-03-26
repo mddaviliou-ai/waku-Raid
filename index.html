@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>公會王團報名排班系統</title>
     
+    <!-- 加入南瓜 LOGO 標籤 -->
+    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🎃</text></svg>'>
+    
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -228,7 +231,6 @@
             
             const [editCharId, setEditCharId] = useState(null);
             const [charToDelete, setCharToDelete] = useState(null);
-            const [accountToDelete, setAccountToDelete] = useState(null); 
 
             const [alertMessage, setAlertMessage] = useState('');
             const [groupToDelete, setGroupToDelete] = useState(null);
@@ -342,7 +344,7 @@
 
             // --- 元件：登入系統畫面 ---
             const LoginScreen = () => {
-                const [selectedAcc, setSelectedAcc] = useState(accounts[0]?.id || '');
+                const [loginName, setLoginName] = useState('');
                 const [passcode, setPasscode] = useState('');
                 const [error, setError] = useState('');
                 
@@ -357,18 +359,28 @@
                         setCharacters(initialCharacters);
                         setAvailability(initialAvailability);
                         setGroups(initialGroups);
-                        setError('✅ 系統已重置為最新乾淨狀態！請重新選擇帳號登入。');
+                        setError('✅ 系統已重置為最新乾淨狀態！請重新登入。');
                     }
                 };
 
                 const doLogin = () => {
-                    const acc = accounts.find(a => a.id === selectedAcc);
-                    const correctPasscode = acc.passcode ? String(acc.passcode) : (acc.role === 'member' ? '1234' : 'admin');
+                    // 防呆：忽略大小寫與前後空白進行比對
+                    const acc = accounts.find(a => a.playerName.toLowerCase() === loginName.trim().toLowerCase());
 
-                    if (acc && String(passcode) === correctPasscode) {
+                    if (!acc) {
+                        setError('找不到此帳號，請確認名稱是否正確或前往註冊！');
+                        return;
+                    }
+
+                    // 修復空密碼被覆蓋的問題
+                    const correctPasscode = (acc.passcode !== undefined && acc.passcode !== null) 
+                        ? String(acc.passcode) 
+                        : (acc.role === 'member' ? '1234' : 'admin');
+
+                    if (String(passcode) === correctPasscode) {
                         handleLogin(acc.id);
                     } else {
-                        setError('密碼錯誤！請確認密碼是否正確。(預設：管理員 admin，一般 1234)');
+                        setError('密碼錯誤！請確認密碼是否正確。');
                     }
                 };
 
@@ -377,7 +389,7 @@
                         setError('請填寫 ID: DC名稱！');
                         return;
                     }
-                    if (accounts.some(a => a.playerName === regName.trim())) {
+                    if (accounts.some(a => a.playerName.toLowerCase() === regName.trim().toLowerCase())) {
                         setError('此名稱已被註冊！');
                         return;
                     }
@@ -394,7 +406,7 @@
                     setIsRegisterOpen(false);
                     setRegName('');
                     setRegPasscode('');
-                    setSelectedAcc(newAccId);
+                    setLoginName(newAcc.playerName);
                     setPasscode('');
                     setError('✅ 註冊成功！請直接輸入密碼登入 (預設為 1234)。');
                 };
@@ -412,15 +424,26 @@
                             {error && <div className={`p-3 rounded mb-4 text-sm font-bold border ${error.includes('✅') ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800'}`}>{error}</div>}
                             <div className="space-y-5">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">選擇您的帳號</label>
-                                    <select className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500 font-medium" value={selectedAcc} onChange={e => setSelectedAcc(e.target.value)}>
-                                        <option value="" disabled>-- 請選擇帳號 --</option>
-                                        {accounts.map(a => <option key={a.id} value={a.id}>{a.playerName}</option>)}
-                                    </select>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">輸入您的 ID (DC名稱)</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="請輸入註冊的名稱" 
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500 font-medium" 
+                                        value={loginName} 
+                                        onChange={e => setLoginName(e.target.value)} 
+                                        onKeyDown={e => e.key === 'Enter' && doLogin()}
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">輸入登入密碼</label>
-                                    <input type="password" placeholder="預設: 一般1234 / 管理admin" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500" value={passcode} onChange={e => setPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && doLogin()} />
+                                    <input 
+                                        type="password" 
+                                        placeholder="預設: 一般1234 / 管理admin" 
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500" 
+                                        value={passcode} 
+                                        onChange={e => setPasscode(e.target.value)} 
+                                        onKeyDown={e => e.key === 'Enter' && doLogin()} 
+                                    />
                                 </div>
                                 <button onClick={doLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition-colors shadow-lg mt-2">登入系統</button>
                                 
@@ -1304,6 +1327,18 @@
                 const [newJobCatText, setNewJobCatText] = useState('#1e3a8a');
                 
                 const [newAccName, setNewAccName] = useState('');
+                
+                // 帳號編輯的暫存狀態
+                const [draftAccounts, setDraftAccounts] = useState(accounts);
+
+                // 當雲端帳號有變動時，同步到暫存（首次載入或其他人修改時）
+                useEffect(() => {
+                    setDraftAccounts(accounts);
+                }, [accounts]);
+
+                const updateDraft = (id, field, value) => {
+                    setDraftAccounts(draftAccounts.map(a => a.id === id ? { ...a, [field]: value } : a));
+                };
 
                 const handleAddBoss = () => {
                     if(!newBossName || !newBossIcon) return;
@@ -1324,10 +1359,20 @@
                     setNewJobCatName('');
                 };
 
-                const handleAddAccount = () => {
+                const handleAddAccountDraft = () => {
                     if(!newAccName) return;
-                    setAccounts([...accounts, { id: 'a_' + Date.now(), playerName: newAccName, role: 'member', passcode: '1234' }]);
+                    setDraftAccounts([...draftAccounts, { id: 'a_' + Date.now(), playerName: newAccName, role: 'member', passcode: '1234' }]);
                     setNewAccName('');
+                };
+                
+                const handleSaveAccounts = () => {
+                    const myAcc = draftAccounts.find(a => a.id === currentAccount.id);
+                    if (!myAcc || myAcc.role !== 'admin') {
+                        setAlertMessage('⚠️ 錯誤：您不能移除自己的帳號或取消自己的管理員權限！這樣會導致您無法管理系統。');
+                        return;
+                    }
+                    setAccounts(draftAccounts);
+                    setAlertMessage('帳號與權限變更已成功儲存！');
                 };
 
                 return (
@@ -1445,14 +1490,19 @@
 
                         {/* 帳號權限管理 */}
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-t-4 border-blue-500 transition-colors">
-                            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">公會帳號權限與密碼管理</h2>
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">公會帳號權限與密碼管理</h2>
+                                <button onClick={handleSaveAccounts} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 shadow transition-colors flex items-center">
+                                    💾 儲存帳號變更
+                                </button>
+                            </div>
                             
                             <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 dark:bg-gray-700/50 p-4 rounded border dark:border-gray-700">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">新玩家名稱</label>
                                     <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-48" placeholder="例: 瓜董(玩家)" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
                                 </div>
-                                <button onClick={handleAddAccount} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 h-[42px] shadow transition-colors">新增玩家帳號</button>
+                                <button onClick={handleAddAccountDraft} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white px-5 py-2 rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-500 h-[42px] shadow transition-colors border dark:border-gray-500">➕ 新增玩家 (未儲存)</button>
                             </div>
 
                             <table className="w-full border-collapse text-sm text-left mt-4">
@@ -1465,33 +1515,22 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {accounts.map(acc => (
+                                    {draftAccounts.map(acc => (
                                         <tr key={acc.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b dark:border-gray-700 transition-colors text-gray-800 dark:text-gray-200">
                                             <td className="p-3 border dark:border-gray-700 font-medium">{acc.playerName}</td>
                                             <td className="p-3 border dark:border-gray-700">
                                                 <input 
                                                     type="text" 
                                                     className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-32 text-center font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-colors" 
-                                                    defaultValue={acc.passcode || ''} 
-                                                    onBlur={(e) => {
-                                                        if (e.target.value !== acc.passcode) {
-                                                            const newAccs = accounts.map(a => a.id === acc.id ? {...a, passcode: e.target.value} : a);
-                                                            setAccounts(newAccs);
-                                                        }
-                                                    }}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') e.target.blur();
-                                                    }}
+                                                    value={acc.passcode !== undefined ? acc.passcode : ''} 
+                                                    onChange={(e) => updateDraft(acc.id, 'passcode', e.target.value)}
                                                 />
                                             </td>
                                             <td className="p-3 border dark:border-gray-700">
                                                 <select 
                                                     className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded transition-colors"
                                                     value={acc.role}
-                                                    onChange={(e) => {
-                                                        const newAccs = accounts.map(a => a.id === acc.id ? {...a, role: e.target.value} : a);
-                                                        setAccounts(newAccs);
-                                                    }}
+                                                    onChange={(e) => updateDraft(acc.id, 'role', e.target.value)}
                                                 >
                                                     <option value="member">一般會員</option>
                                                     <option value="subadmin">副管理員</option>
@@ -1501,13 +1540,20 @@
                                             <td className="p-3 border dark:border-gray-700 text-center">
                                                  <button 
                                                     className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-bold px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
-                                                    onClick={() => setAccountToDelete(acc.id)}
-                                                 >刪除</button>
+                                                    onClick={() => {
+                                                        if (acc.id === currentAccount.id) {
+                                                            setAlertMessage('⚠️ 您不能移除自己的帳號！');
+                                                            return;
+                                                        }
+                                                        setDraftAccounts(draftAccounts.filter(a => a.id !== acc.id));
+                                                    }}
+                                                 >移除(未儲存)</button>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
+                            <p className="text-xs text-orange-500 mt-3 font-bold">※ 所有變更 (修改密碼、調整權限、移除帳號) 必須點擊右上角的「💾 儲存帳號變更」按鈕才會真正生效！</p>
                         </div>
                     </div>
                 );
@@ -1718,23 +1764,6 @@
                                 <div className="flex justify-end space-x-3">
                                     <button onClick={() => setCharToDelete(null)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                     <button onClick={confirmDeleteChar} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 自訂 Confirm Modal (帳號刪除確認) */}
-                    {accountToDelete && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500 transition-colors">
-                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600 dark:text-red-400">🚨 刪除帳號確認</h2>
-                                <p className="mb-6 text-gray-700 dark:text-gray-300">確定要刪除該玩家帳號嗎？<br/><span className="text-red-500 dark:text-red-400 font-bold">他將無法再登入系統。</span></p>
-                                <div className="flex justify-end space-x-3">
-                                    <button onClick={() => setAccountToDelete(null)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
-                                    <button onClick={() => {
-                                        setAccounts(accounts.filter(a => a.id !== accountToDelete));
-                                        setAccountToDelete(null);
-                                    }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
                                 </div>
                             </div>
                         </div>
