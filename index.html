@@ -220,6 +220,10 @@
             const currentAccount = (accounts || []).find(a => a.id === loggedInId) || null;
             const [activeTab, setActiveTab] = useState('my-schedule');
 
+            // --- 新增：將子元件的排序與過濾狀態提升，避免資料更新觸發重新渲染時狀態丟失 ---
+            const [matrixSortMode, setMatrixSortMode] = useState('default');
+            const [raidFilterMode, setRaidFilterMode] = useState('all');
+
             const handleLogin = (id) => {
                 setLoggedInId(id);
                 setLocal('waku-raid-loggedInId', id);
@@ -808,8 +812,8 @@
 
             // --- 元件：報名總表 ---
             const AvailabilityMatrix = ({ onOpenCreateModal }) => {
-                const [sortMode, setSortMode] = useState('default'); 
-                const [selectedBossTab, setSelectedBossTab] = useState('all'); // 新增：王團分頁狀態
+                // 移除此處的 useState，改用上層 App 傳入或宣告的狀態，避免元件重新渲染時重置
+                // const [sortMode, setSortMode] = useState('default'); 
 
                 const assignCharToGroup = (charId, groupId) => {
                     if (!groupId) return;
@@ -847,9 +851,9 @@
 
                 const sortedCharacters = useMemo(() => {
                     let sorted = [...(characters || [])];
-                    if (sortMode === 'name') {
+                    if (matrixSortMode === 'name') {
                         sorted.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
-                    } else if (sortMode === 'job') {
+                    } else if (matrixSortMode === 'job') {
                         sorted.sort((a, b) => {
                             const jcA = (jobCategories || []).find(j => j.id === a.jobTypeId);
                             const jcB = (jobCategories || []).find(j => j.id === b.jobTypeId);
@@ -861,13 +865,13 @@
                             
                             return (a.job || '').localeCompare((b.job || ''), 'zh-TW');
                         });
-                    } else if (sortMode === 'levelDesc') {
+                    } else if (matrixSortMode === 'levelDesc') {
                         sorted.sort((a, b) => b.level - a.level);
-                    } else if (sortMode === 'levelAsc') {
+                    } else if (matrixSortMode === 'levelAsc') {
                         sorted.sort((a, b) => a.level - b.level);
                     }
                     return sorted; 
-                }, [characters, sortMode, jobCategories]);
+                }, [characters, matrixSortMode, jobCategories]);
 
                 // 處理分頁過濾邏輯
                 const displayCharacters = useMemo(() => {
@@ -923,8 +927,8 @@
                                             <div className="relative w-4 h-4 text-orange-500 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 transition-colors" title="選擇排序方式">
                                                 <select 
                                                     className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
-                                                    value={sortMode === 'name' ? sortMode : 'default'}
-                                                    onChange={(e) => setSortMode(e.target.value)}
+                                                    value={matrixSortMode === 'name' ? matrixSortMode : 'default'}
+                                                    onChange={(e) => setMatrixSortMode(e.target.value)}
                                                 >
                                                     <option value="default">預設順序</option>
                                                     <option value="name">按筆畫排序</option>
@@ -940,8 +944,8 @@
                                             <div className="relative w-4 h-4 text-orange-500 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 transition-colors" title="選擇排序方式">
                                                 <select 
                                                     className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
-                                                    value={['job', 'levelDesc', 'levelAsc'].includes(sortMode) ? sortMode : 'default'}
-                                                    onChange={(e) => setSortMode(e.target.value)}
+                                                    value={['job', 'levelDesc', 'levelAsc'].includes(matrixSortMode) ? matrixSortMode : 'default'}
+                                                    onChange={(e) => setMatrixSortMode(e.target.value)}
                                                 >
                                                     <option value="default">預設順序</option>
                                                     <option value="job">同職業排序</option>
@@ -1149,7 +1153,8 @@
 
             // --- 元件：排團管理 ---
             const RaidPlanner = ({ onOpenCreateModal }) => {
-                const [filterMode, setFilterMode] = useState('all'); // 新增：過濾模式
+                // 移除此處的 useState，改用上層 App 傳入或宣告的狀態，避免元件重新渲染時重置
+                // const [filterMode, setFilterMode] = useState('all'); 
                 const myCharIds = (characters || []).filter(c => c.accountId === currentAccount.id).map(c => c.id);
 
                 const handleDeleteGroup = (groupId) => {
@@ -1199,12 +1204,12 @@
                                 <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">王團編組排班</h2>
                                 <div className="bg-gray-100 dark:bg-gray-700 p-1 rounded-lg flex space-x-1 border border-gray-200 dark:border-gray-600 shadow-inner">
                                     <button 
-                                        onClick={() => setFilterMode('all')} 
-                                        className={`px-3 py-1 text-sm font-bold rounded-md transition-colors ${filterMode === 'all' ? 'bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                                        onClick={() => setRaidFilterMode('all')} 
+                                        className={`px-3 py-1 text-sm font-bold rounded-md transition-colors ${raidFilterMode === 'all' ? 'bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                                     >顯示全部隊伍</button>
                                     <button 
-                                        onClick={() => setFilterMode('mine')} 
-                                        className={`px-3 py-1 text-sm font-bold rounded-md transition-colors ${filterMode === 'mine' ? 'bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                                        onClick={() => setRaidFilterMode('mine')} 
+                                        className={`px-3 py-1 text-sm font-bold rounded-md transition-colors ${raidFilterMode === 'mine' ? 'bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                                     >顯示自己隊伍</button>
                                 </div>
                             </div>
@@ -1218,7 +1223,7 @@
                         {(bosses || []).map(boss => {
                             const bossGroups = (groups || []).filter(g => {
                                 if (g.bossId !== boss.id) return false;
-                                if (filterMode === 'mine') {
+                                if (raidFilterMode === 'mine') {
                                     // 只顯示有包含自己角色的隊伍
                                     return (g.members || []).some(mId => myCharIds.includes(mId)) || (g.reserves || []).some(mId => myCharIds.includes(mId));
                                 }
@@ -1489,6 +1494,14 @@
                         setAlertMessage('⚠️ 錯誤：您不能移除自己的帳號或取消自己的管理員權限！這樣會導致您無法管理系統。');
                         return;
                     }
+                    
+                    // 檢查密碼長度防呆
+                    const invalidAcc = (draftAccounts || []).find(a => !a.passcode || a.passcode.length < 4);
+                    if (invalidAcc) {
+                        setAlertMessage(`⚠️ 錯誤：玩家「${invalidAcc.playerName}」的密碼不能為空或少於 4 碼！\n請設定 4~8 碼的英數字。`);
+                        return;
+                    }
+
                     setAccounts(draftAccounts);
                     setAlertMessage('帳號與權限變更已成功儲存！');
                 };
@@ -1596,14 +1609,8 @@
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">本週起始日期 (通常設為週四)</label>
                                     <input type="date" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded h-[42px] cursor-pointer" value={weekStartDate} onChange={(e) => setWeekStartDate(e.target.value)} />
                                 </div>
-                                <div className="ml-auto">
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">重置動作</label>
-                                    <button onClick={() => setIsConfirmResetOpen(true)} className="bg-yellow-600 text-white px-5 py-2 rounded font-bold hover:bg-yellow-700 shadow h-[42px] flex items-center transition-colors">
-                                        <span className="mr-2">⚠️</span> 清空報名表單與王團名單
-                                    </button>
-                                </div>
                             </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">💡 提示：更改起始日期後，所有頁面的日期將會自動順延 7 天。準備開新團前，請點擊「清空報名表單」將所有人舊的打勾紀錄歸零。</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">💡 提示：更改起始日期後，所有頁面的日期將會自動順延 7 天。準備開新團前，如果您想清空報名資料重新開始，請至登入畫面連點左上方劍圖示以進行重置。</p>
                         </div>
 
                         {/* 帳號權限管理 */}
@@ -1641,7 +1648,14 @@
                                                     type="text" 
                                                     className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-32 text-center font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-colors" 
                                                     value={acc.passcode !== undefined ? acc.passcode : ''} 
-                                                    onChange={(e) => updateDraft(acc.id, 'passcode', e.target.value)}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        // 限制只能輸入英文字母和數字，最多 8 碼
+                                                        if (val === '' || /^[a-zA-Z0-9]{0,8}$/.test(val)) {
+                                                            updateDraft(acc.id, 'passcode', val);
+                                                        }
+                                                    }}
+                                                    placeholder="4~8碼英數字"
                                                 />
                                             </td>
                                             <td className="p-3 border dark:border-gray-700">
@@ -1752,7 +1766,7 @@
                     {/* 新增/編輯角色 Modal */}
                     {isAddCharModalOpen && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-md border-t-8 border-blue-500 transition-colors">
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-md border-t-8 border-blue-50 transition-colors">
                                 <h2 className="text-2xl font-black mb-4 flex items-center text-gray-800 dark:text-gray-100">
                                     <span className="text-blue-500 mr-2">{editCharId ? '✏️' : '➕'}</span> 
                                     {editCharId ? '編輯遊戲角色' : '新增遊戲角色'}
@@ -1868,60 +1882,6 @@
                                         setGroups((groups || []).filter(g => g.id !== groupToDelete));
                                         setGroupToDelete(null);
                                     }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 自訂 Confirm Modal (角色刪除確認) */}
-                    {charToDelete && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500 transition-colors">
-                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600 dark:text-red-400">🚨 刪除角色確認</h2>
-                                <p className="mb-6 text-gray-700 dark:text-gray-300">確定要刪除該角色嗎？<br/><span className="text-red-500 dark:text-red-400 font-bold">這將會同時將其從已排入的王團中移除。</span></p>
-                                <div className="flex justify-end space-x-3">
-                                    <button onClick={() => setCharToDelete(null)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
-                                    <button onClick={confirmDeleteChar} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 自訂 Confirm Modal (帳號刪除確認) */}
-                    {accountToDelete && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500 transition-colors">
-                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600 dark:text-red-400">🚨 刪除帳號確認</h2>
-                                <p className="mb-6 text-gray-700 dark:text-gray-300">確定要刪除該玩家帳號嗎？<br/><span className="text-red-500 dark:text-red-400 font-bold">他將無法再登入系統。</span></p>
-                                <div className="flex justify-end space-x-3">
-                                    <button onClick={() => setAccountToDelete(null)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
-                                    <button onClick={() => {
-                                        setAccounts((accounts || []).filter(a => a.id !== accountToDelete));
-                                        setAccountToDelete(null);
-                                    }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 自訂 Confirm Modal (換週清空確認) */}
-                    {isConfirmResetOpen && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-yellow-500 transition-colors">
-                                <h2 className="text-xl font-black mb-4 flex items-center text-yellow-600 dark:text-yellow-400">⚠️ 換週清空確認</h2>
-                                <p className="mb-6 text-gray-700 dark:text-gray-300">確定要清空所有人的報名資料與王團名單嗎？<br/><span className="text-red-500 dark:text-red-400 font-bold">此操作將重置全部表單，無法復原！</span></p>
-                                <div className="flex justify-end space-x-3">
-                                    <button onClick={() => setIsConfirmResetOpen(false)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
-                                    <button onClick={() => {
-                                        const newAvail = {};
-                                        (characters || []).forEach(c => {
-                                            newAvail[c.id] = { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
-                                        });
-                                        setAvailability(newAvail); // 自動同步至雲端
-                                        setGroups([]);             // 自動同步至雲端
-                                        setIsConfirmResetOpen(false);
-                                        setAlertMessage('已成功清空所有報名資料與排班名單！大家可以開始填寫新的一週了！');
-                                    }} className="px-5 py-2 bg-yellow-600 text-white rounded font-bold hover:bg-yellow-700 shadow transition-colors">確認清空</button>
                                 </div>
                             </div>
                         </div>
