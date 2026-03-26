@@ -307,16 +307,6 @@
                 const [passcode, setPasscode] = useState('');
                 const [error, setError] = useState('');
 
-                const forceResetAccounts = () => {
-                    if(window.confirm('這將會清除雲端舊帳號與舊名單，並載入最新乾淨的初始狀態，確定要執行嗎？')) {
-                        setAccounts(initialAccounts);
-                        setCharacters(initialCharacters);
-                        setAvailability(initialAvailability);
-                        setGroups(initialGroups);
-                        setError('✅ 系統已重置為最新乾淨狀態！請重新選擇帳號登入。');
-                    }
-                };
-
                 const doLogin = () => {
                     const acc = accounts.find(a => a.id === selectedAcc);
                     const correctPasscode = acc.passcode ? String(acc.passcode) : (acc.role === 'member' ? '1234' : 'admin');
@@ -332,7 +322,7 @@
                     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 relative">
                         <div className="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full border-t-8 border-blue-500 z-10">
                             <h1 className="text-2xl font-black text-center mb-6 text-gray-800"><span className="text-blue-500">⚔️</span> 公會排班登入</h1>
-                            {error && <div className={`p-3 rounded mb-4 text-sm font-bold border ${error.includes('✅') ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-600 border-red-200'}`}>{error}</div>}
+                            {error && <div className={`p-3 rounded mb-4 text-sm font-bold border bg-red-100 text-red-600 border-red-200`}>{error}</div>}
                             <div className="space-y-5">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1">選擇您的帳號</label>
@@ -538,7 +528,7 @@
 
             // --- 元件：報名總表 ---
             const AvailabilityMatrix = ({ onOpenCreateModal }) => {
-                const [sortMode, setSortMode] = useState('default'); // 新增：排序狀態管理
+                const [sortMode, setSortMode] = useState('default'); 
 
                 const assignCharToGroup = (charId, groupId) => {
                     if (!groupId) return;
@@ -573,35 +563,28 @@
                     setGroups(newGroups);
                 };
 
-                // 新增：處理名單動態排序的邏輯 (按筆畫、職業、等級)
                 const sortedCharacters = useMemo(() => {
                     let sorted = [...characters];
                     if (sortMode === 'name') {
-                        // 依照名稱筆畫排序 (繁體中文語系)
                         sorted.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
                     } else if (sortMode === 'job') {
-                        // 依照同系列(group)排序，再依照同職業(job)排序
                         sorted.sort((a, b) => {
                             const jcA = jobCategories.find(j => j.id === a.jobTypeId);
                             const jcB = jobCategories.find(j => j.id === b.jobTypeId);
                             const groupA = jcA ? (jcA.group || '其他') : '其他';
                             const groupB = jcB ? (jcB.group || '其他') : '其他';
                             
-                            // 先比對系列 (例如: 法師系 vs 劍士系)
                             const groupCompare = groupA.localeCompare(groupB, 'zh-TW');
                             if (groupCompare !== 0) return groupCompare;
                             
-                            // 系列相同，再比對職業 (例如: 主教 vs 冰雷)
                             return (a.job || '').localeCompare((b.job || ''), 'zh-TW');
                         });
                     } else if (sortMode === 'levelDesc') {
-                        // 等級：高到低
                         sorted.sort((a, b) => b.level - a.level);
                     } else if (sortMode === 'levelAsc') {
-                        // 等級：低到高
                         sorted.sort((a, b) => a.level - b.level);
                     }
-                    return sorted; // 若為 default 則保持原註冊順序
+                    return sorted; 
                 }, [characters, sortMode, jobCategories]);
 
                 return (
@@ -612,36 +595,40 @@
                         <table className="w-full border-collapse text-sm text-left whitespace-nowrap">
                             <thead>
                                 <tr className="bg-orange-100 border-b-2 border-orange-300">
-                                    <th className="p-2 border min-w-[140px]">
-                                        <div className="flex items-center justify-between">
+                                    <th className="p-2 border">
+                                        <div className="flex items-center space-x-1">
                                             <span>角色名稱</span>
-                                            {/* 名稱排序下拉選單 */}
-                                            <select 
-                                                className="bg-white border border-orange-200 text-orange-800 text-[11px] rounded outline-none cursor-pointer ml-1 p-0.5 shadow-sm focus:ring-1 focus:ring-orange-400"
-                                                value={sortMode === 'name' ? sortMode : 'default'}
-                                                onChange={(e) => setSortMode(e.target.value)}
-                                                title="選擇排序方式"
-                                            >
-                                                <option value="default">預設順序</option>
-                                                <option value="name">按筆畫排序</option>
-                                            </select>
+                                            {/* 隱藏文字的下拉選單 */}
+                                            <div className="relative w-4 h-4 text-orange-500 hover:text-orange-700 transition-colors" title="選擇排序方式">
+                                                <select 
+                                                    className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
+                                                    value={sortMode === 'name' ? sortMode : 'default'}
+                                                    onChange={(e) => setSortMode(e.target.value)}
+                                                >
+                                                    <option value="default">預設順序</option>
+                                                    <option value="name">按筆畫排序</option>
+                                                </select>
+                                                <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
+                                            </div>
                                         </div>
                                     </th>
-                                    <th className="p-2 border min-w-[140px]">
-                                        <div className="flex items-center justify-between">
+                                    <th className="p-2 border">
+                                        <div className="flex items-center space-x-1">
                                             <span>職業</span>
-                                            {/* 職業與等級排序下拉選單 */}
-                                            <select 
-                                                className="bg-white border border-orange-200 text-orange-800 text-[11px] rounded outline-none cursor-pointer ml-1 p-0.5 shadow-sm focus:ring-1 focus:ring-orange-400"
-                                                value={['job', 'levelDesc', 'levelAsc'].includes(sortMode) ? sortMode : 'default'}
-                                                onChange={(e) => setSortMode(e.target.value)}
-                                                title="選擇排序方式"
-                                            >
-                                                <option value="default">預設順序</option>
-                                                <option value="job">同職業排序</option>
-                                                <option value="levelDesc">等級高到低</option>
-                                                <option value="levelAsc">等級低到高</option>
-                                            </select>
+                                            {/* 隱藏文字的下拉選單 */}
+                                            <div className="relative w-4 h-4 text-orange-500 hover:text-orange-700 transition-colors" title="選擇排序方式">
+                                                <select 
+                                                    className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
+                                                    value={['job', 'levelDesc', 'levelAsc'].includes(sortMode) ? sortMode : 'default'}
+                                                    onChange={(e) => setSortMode(e.target.value)}
+                                                >
+                                                    <option value="default">預設順序</option>
+                                                    <option value="job">同職業排序</option>
+                                                    <option value="levelDesc">等級高到低</option>
+                                                    <option value="levelAsc">等級低到高</option>
+                                                </select>
+                                                <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
+                                            </div>
                                         </div>
                                     </th>
                                     <th className="p-2 border w-1/4">報名的王團</th>
@@ -664,7 +651,6 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {/* 替換：將原本的 characters.map 改為已經排好序的 sortedCharacters.map */}
                                 {sortedCharacters.map(char => {
                                     const avail = availability[char.id] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
                                     if(!avail.days.some(d => d)) return null; 
@@ -695,11 +681,21 @@
                                             <td className="p-2 border text-gray-600 text-xs whitespace-normal min-w-[120px]">{avail.note}</td>
                                             {avail.days.map((isAvail, dayIndex) => {
                                                 const charGroupsOnDay = groups.filter(g => g.dayIndex === dayIndex && (g.members.includes(char.id) || g.reserves.includes(char.id)));
-                                                const availableGroupsOnDay = groups.filter(g => 
-                                                    g.dayIndex === dayIndex && 
-                                                    !g.members.includes(char.id) && 
-                                                    !g.reserves.includes(char.id)
-                                                );
+                                                
+                                                // 過濾快速指派選單，只顯示有報名且「剩餘次數大於0」的王團
+                                                const availableGroupsOnDay = groups.filter(g => {
+                                                    if (g.dayIndex !== dayIndex) return false;
+                                                    if (g.members.includes(char.id) || g.reserves.includes(char.id)) return false;
+                                                    
+                                                    const bId = g.bossId;
+                                                    if (!(avail.bosses || []).includes(bId)) return false;
+                                                    
+                                                    const totalCount = parseInt(avail.bossCounts?.[bId]) || 1;
+                                                    const assignedCount = groups.filter(grp => grp.bossId === bId && (grp.members.includes(char.id) || grp.reserves.includes(char.id))).length;
+                                                    const remainingCount = Math.max(0, totalCount - assignedCount);
+                                                    
+                                                    return remainingCount > 0;
+                                                });
 
                                                 return (
                                                     <td key={dayIndex} className="p-2 border text-center align-top relative min-w-[90px]">
@@ -765,14 +761,11 @@
                                                                             title="直接指派到王團"
                                                                         >
                                                                             <option value="" disabled>+ 快速指派</option>
-                                                                            {availableGroupsOnDay.map(g => {
-                                                                                const isDesired = (avail.bosses || []).includes(g.bossId);
-                                                                                return (
-                                                                                    <option key={g.id} value={g.id}>
-                                                                                        {g.name} {!isDesired ? '(未報名)' : ''}
-                                                                                    </option>
-                                                                                )
-                                                                            })}
+                                                                            {availableGroupsOnDay.map(g => (
+                                                                                <option key={g.id} value={g.id}>
+                                                                                    {g.name}
+                                                                                </option>
+                                                                            ))}
                                                                         </select>
                                                                     ) : (
                                                                         charGroupsOnDay.length === 0 && !groups.some(g => g.dayIndex === dayIndex) && (
