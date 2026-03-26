@@ -235,11 +235,23 @@
             
             const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false); 
 
-            const getJobStyle = (typeId) => {
+            // --- 【核心升級】深色模式下的職業顏色動態提亮 ---
+            const getJobStyle = (typeId, isWhiteBg = false) => {
                 const jc = jobCategories.find(j => j.id === typeId);
-                // 在深色模式下，背景調暗一點，邊框與文字顏色保留
-                if (jc) return { backgroundColor: darkMode ? jc.bgColor.replace(/fff|f[0-9a-f]{2}/gi, '#374151') : jc.bgColor, color: jc.textColor, border: `1px solid ${jc.borderColor}` };
-                return { backgroundColor: darkMode ? '#374151' : '#e5e7eb', color: darkMode ? '#d1d5db' : '#374151', border: '1px solid #d1d5db' };
+                if (jc) {
+                    return { 
+                        backgroundColor: darkMode ? '#1f2937' : (isWhiteBg ? '#ffffff' : jc.bgColor), 
+                        color: jc.textColor, 
+                        border: `1px solid ${jc.borderColor}`,
+                        // 深色模式專屬調光：提亮 1.5 倍並增加飽和度，讓暗色系文字在黑色背景中極度清晰
+                        filter: darkMode ? 'brightness(1.5) saturate(1.2)' : 'none'
+                    };
+                }
+                return { 
+                    backgroundColor: darkMode ? '#374151' : (isWhiteBg ? '#ffffff' : '#e5e7eb'), 
+                    color: darkMode ? '#d1d5db' : '#374151', 
+                    border: '1px solid #d1d5db' 
+                };
             };
 
             const handleOpenCreateModal = (dayIdx = 0) => {
@@ -1257,13 +1269,7 @@
                                                                         </td>
                                                                         <td className="p-1 border dark:border-gray-600 text-center">
                                                                             {char ? (
-                                                                                <span style={{
-                                                                                    backgroundColor: darkMode ? getJobStyle(char.jobTypeId).backgroundColor : '#ffffff',
-                                                                                    color: getJobStyle(char.jobTypeId).color,
-                                                                                    borderColor: getJobStyle(char.jobTypeId).color,
-                                                                                    borderWidth: '1px',
-                                                                                    borderStyle: 'solid'
-                                                                                }} className="px-2 py-0.5 rounded text-[11px] font-bold inline-block shadow-sm whitespace-nowrap">
+                                                                                <span style={getJobStyle(char.jobTypeId, true)} className="px-2 py-1 rounded text-sm font-bold inline-block shadow-sm whitespace-nowrap">
                                                                                     {char.job} {char.level}
                                                                                 </span>
                                                                             ) : (
@@ -1404,8 +1410,8 @@
                                         <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-3 border-b dark:border-gray-700 pb-1">{groupName}</h3>
                                         <div className="flex flex-wrap gap-2">
                                             {jobs.map(jc => (
-                                                <div key={jc.id} className="border px-2 py-1 rounded flex items-center space-x-1 shadow-sm text-sm transition-all hover:scale-105" style={{ backgroundColor: darkMode ? '#374151' : jc.bgColor, borderColor: jc.borderColor }}>
-                                                    <span className="font-bold" style={{ color: jc.textColor }}>{jc.name}</span>
+                                                <div key={jc.id} className="px-2 py-1 rounded flex items-center space-x-1 shadow-sm text-sm transition-all hover:scale-105" style={getJobStyle(jc.id)}>
+                                                    <span className="font-bold">{jc.name}</span>
                                                     <button 
                                                         className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 font-black ml-1 opacity-60 hover:opacity-100 transition-opacity"
                                                         onClick={() => setJobCategories(jobCategories.filter(j => j.id !== jc.id))}
