@@ -307,6 +307,16 @@
                 const [passcode, setPasscode] = useState('');
                 const [error, setError] = useState('');
 
+                const forceResetAccounts = () => {
+                    if(window.confirm('這將會清除雲端舊帳號與舊名單，並載入最新乾淨的初始狀態，確定要執行嗎？')) {
+                        setAccounts(initialAccounts);
+                        setCharacters(initialCharacters);
+                        setAvailability(initialAvailability);
+                        setGroups(initialGroups);
+                        setError('✅ 系統已重置為最新乾淨狀態！請重新選擇帳號登入。');
+                    }
+                };
+
                 const doLogin = () => {
                     const acc = accounts.find(a => a.id === selectedAcc);
                     const correctPasscode = acc.passcode ? String(acc.passcode) : (acc.role === 'member' ? '1234' : 'admin');
@@ -570,8 +580,20 @@
                         // 依照名稱筆畫排序 (繁體中文語系)
                         sorted.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
                     } else if (sortMode === 'job') {
-                        // 依照相同職業名稱排序
-                        sorted.sort((a, b) => a.job.localeCompare(b.job, 'zh-TW'));
+                        // 依照同系列(group)排序，再依照同職業(job)排序
+                        sorted.sort((a, b) => {
+                            const jcA = jobCategories.find(j => j.id === a.jobTypeId);
+                            const jcB = jobCategories.find(j => j.id === b.jobTypeId);
+                            const groupA = jcA ? (jcA.group || '其他') : '其他';
+                            const groupB = jcB ? (jcB.group || '其他') : '其他';
+                            
+                            // 先比對系列 (例如: 法師系 vs 劍士系)
+                            const groupCompare = groupA.localeCompare(groupB, 'zh-TW');
+                            if (groupCompare !== 0) return groupCompare;
+                            
+                            // 系列相同，再比對職業 (例如: 主教 vs 冰雷)
+                            return (a.job || '').localeCompare((b.job || ''), 'zh-TW');
+                        });
                     } else if (sortMode === 'levelDesc') {
                         // 等級：高到低
                         sorted.sort((a, b) => b.level - a.level);
@@ -580,7 +602,7 @@
                         sorted.sort((a, b) => a.level - b.level);
                     }
                     return sorted; // 若為 default 則保持原註冊順序
-                }, [characters, sortMode]);
+                }, [characters, sortMode, jobCategories]);
 
                 return (
                     <div className="bg-white p-6 rounded-lg shadow overflow-x-auto">
