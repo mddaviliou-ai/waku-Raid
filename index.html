@@ -987,56 +987,71 @@
                                                                         <td className="p-2 border text-center font-bold text-gray-400">{idx + 1}</td>
                                                                         <td className="p-1 border">
                                                                             {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') ? (
-                                                                                <select 
-                                                                                    className={`w-full p-1.5 border rounded font-bold text-sm ${memberId ? 'bg-blue-50 text-blue-800 border-blue-300' : 'bg-gray-50 text-gray-500 border-gray-200'} focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors`}
-                                                                                    value={memberId}
-                                                                                    onChange={(e) => handleAssign(group.id, 'members', idx, e.target.value)}
-                                                                                >
-                                                                                    <option value="">- 選擇隊員 -</option>
-                                                                                    {(() => {
-                                                                                        const eligible = [];
-                                                                                        const others = [];
-                                                                                        characters.forEach(c => {
-                                                                                            // 【新增防呆】如果這個角色已經在這個隊伍的其他格子裡，就直接隱藏不讓他重複選
-                                                                                            if (group.members.includes(c.id) && c.id !== memberId) return;
+                                                                                <div className="relative focus-within:ring-2 focus-within:ring-blue-400 rounded">
+                                                                                    {/* 表面顯示的 UI (只顯示名稱) */}
+                                                                                    <div className={`w-full p-1.5 border rounded font-bold text-sm flex justify-between items-center ${memberId ? 'bg-blue-50 text-blue-800 border-blue-300' : 'bg-gray-50 text-gray-500 border-gray-200'} transition-colors`}>
+                                                                                        <span className="truncate">
+                                                                                            {memberId ? (
+                                                                                                <>
+                                                                                                    {char ? char.name : '未知角色'}
+                                                                                                    {warningText && <span className="text-orange-500 text-[10px] ml-1 font-normal">{warningText}</span>}
+                                                                                                </>
+                                                                                            ) : '- 選擇隊員 -'}
+                                                                                        </span>
+                                                                                        <svg className="w-4 h-4 ml-1 flex-shrink-0 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                                                    </div>
+                                                                                    {/* 隱藏但可點選的原生 Select (下拉會顯示完整資訊) */}
+                                                                                    <select 
+                                                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                                                        value={memberId}
+                                                                                        onChange={(e) => handleAssign(group.id, 'members', idx, e.target.value)}
+                                                                                    >
+                                                                                        <option value="">- 選擇隊員 -</option>
+                                                                                        {(() => {
+                                                                                            const eligible = [];
+                                                                                            const others = [];
+                                                                                            characters.forEach(c => {
+                                                                                                // 【新增防呆】如果這個角色已經在這個隊伍的其他格子裡，就直接隱藏不讓他重複選
+                                                                                                if (group.members.includes(c.id) && c.id !== memberId) return;
 
-                                                                                            const cAvail = availability[c.id];
-                                                                                            const isDayChecked = cAvail && cAvail.days[group.dayIndex];
-                                                                                            const isBossChecked = cAvail && cAvail.bosses && cAvail.bosses.includes(group.bossId);
-                                                                                            
-                                                                                            if (isDayChecked && isBossChecked) {
-                                                                                                eligible.push(c);
-                                                                                            } else {
-                                                                                                others.push(c);
-                                                                                            }
-                                                                                        });
+                                                                                                const cAvail = availability[c.id];
+                                                                                                const isDayChecked = cAvail && cAvail.days[group.dayIndex];
+                                                                                                const isBossChecked = cAvail && cAvail.bosses && cAvail.bosses.includes(group.bossId);
+                                                                                                
+                                                                                                if (isDayChecked && isBossChecked) {
+                                                                                                    eligible.push(c);
+                                                                                                } else {
+                                                                                                    others.push(c);
+                                                                                                }
+                                                                                            });
 
-                                                                                        const renderOpt = (c) => {
-                                                                                            const cConflict = getConflictGroup(c.id, group.id, group.dayIndex);
-                                                                                            const cWarn = cConflict ? `(⚠️已排: ${cConflict})` : '';
+                                                                                            const renderOpt = (c) => {
+                                                                                                const cConflict = getConflictGroup(c.id, group.id, group.dayIndex);
+                                                                                                const cWarn = cConflict ? `(⚠️已排: ${cConflict})` : '';
+                                                                                                return (
+                                                                                                    <option key={c.id} value={c.id}>
+                                                                                                        [{c.job}] {c.name} (Lv.{c.level}) {cWarn}
+                                                                                                    </option>
+                                                                                                );
+                                                                                            };
+
                                                                                             return (
-                                                                                                <option key={c.id} value={c.id}>
-                                                                                                    [{c.job}] {c.name} (Lv.{c.level}) {cWarn}
-                                                                                                </option>
+                                                                                                <React.Fragment>
+                                                                                                    {eligible.length > 0 && (
+                                                                                                        <optgroup label="✅ 符合條件 (當日有報名)">
+                                                                                                            {eligible.map(renderOpt)}
+                                                                                                        </optgroup>
+                                                                                                    )}
+                                                                                                    {others.length > 0 && (
+                                                                                                        <optgroup label="❌ 未報名 (強制指派)">
+                                                                                                            {others.map(renderOpt)}
+                                                                                                        </optgroup>
+                                                                                                    )}
+                                                                                                </React.Fragment>
                                                                                             );
-                                                                                        };
-
-                                                                                        return (
-                                                                                            <React.Fragment>
-                                                                                                {eligible.length > 0 && (
-                                                                                                    <optgroup label="✅ 符合條件 (當日有報名)">
-                                                                                                        {eligible.map(renderOpt)}
-                                                                                                    </optgroup>
-                                                                                                )}
-                                                                                                {others.length > 0 && (
-                                                                                                    <optgroup label="❌ 未報名 (強制指派)">
-                                                                                                        {others.map(renderOpt)}
-                                                                                                    </optgroup>
-                                                                                                )}
-                                                                                            </React.Fragment>
-                                                                                        );
-                                                                                    })()}
-                                                                                </select>
+                                                                                        })()}
+                                                                                    </select>
+                                                                                </div>
                                                                             ) : (
                                                                                 <div className="p-1 flex items-center space-x-2">
                                                                                     {char ? (
