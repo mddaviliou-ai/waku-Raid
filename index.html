@@ -636,6 +636,7 @@
             // --- 元件：報名總表 ---
             const AvailabilityMatrix = ({ onOpenCreateModal }) => {
                 const [sortMode, setSortMode] = useState('default'); 
+                const [selectedBossTab, setSelectedBossTab] = useState('all'); // 新增：王團分頁狀態
 
                 const assignCharToGroup = (charId, groupId) => {
                     if (!groupId) return;
@@ -971,6 +972,9 @@
 
             // --- 元件：排團管理 ---
             const RaidPlanner = ({ onOpenCreateModal }) => {
+                const [filterMode, setFilterMode] = useState('all'); // 新增：過濾模式
+                const myCharIds = characters.filter(c => c.accountId === currentAccount.id).map(c => c.id);
+
                 const handleDeleteGroup = (groupId) => {
                     setGroupToDelete(groupId);
                 };
@@ -1014,7 +1018,19 @@
                 return (
                     <div className="space-y-8">
                         <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow border-l-4 border-indigo-500">
-                            <h2 className="text-2xl font-bold text-gray-800">王團編組排班 (依王團分類)</h2>
+                            <div className="flex items-center space-x-4">
+                                <h2 className="text-2xl font-bold text-gray-800">王團編組排班</h2>
+                                <div className="bg-gray-100 p-1 rounded-lg flex space-x-1 border border-gray-200 shadow-inner">
+                                    <button 
+                                        onClick={() => setFilterMode('all')} 
+                                        className={`px-3 py-1 text-sm font-bold rounded-md transition-colors ${filterMode === 'all' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >顯示全部隊伍</button>
+                                    <button 
+                                        onClick={() => setFilterMode('mine')} 
+                                        className={`px-3 py-1 text-sm font-bold rounded-md transition-colors ${filterMode === 'mine' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >顯示自己隊伍</button>
+                                </div>
+                            </div>
                             {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
                                 <button onClick={() => onOpenCreateModal(0)} className="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 shadow">
                                     + 新增隊伍
@@ -1023,7 +1039,15 @@
                         </div>
 
                         {bosses.map(boss => {
-                            const bossGroups = groups.filter(g => g.bossId === boss.id);
+                            const bossGroups = groups.filter(g => {
+                                if (g.bossId !== boss.id) return false;
+                                if (filterMode === 'mine') {
+                                    // 只顯示有包含自己角色的隊伍
+                                    return g.members.some(mId => myCharIds.includes(mId)) || g.reserves.some(mId => myCharIds.includes(mId));
+                                }
+                                return true;
+                            });
+                            
                             if(bossGroups.length === 0) return null;
 
                             return (
@@ -1092,6 +1116,11 @@
                                                                 
                                                                 const warningText = warnArr.length > 0 ? `(⚠️ ${warnArr.join(', ')})` : '';
 
+                                                                // 高亮判斷
+                                                                const isMyChar = myCharIds.includes(memberId);
+                                                                const highlightClasses = isMyChar ? 'bg-yellow-100 text-yellow-900 border-yellow-400 ring-2 ring-yellow-400' : 'bg-blue-50 text-blue-800 border-blue-300';
+                                                                const highlightClassesReadOnly = isMyChar ? 'bg-yellow-100 text-yellow-900 border-yellow-400 ring-1 ring-yellow-400' : 'bg-gray-50 text-gray-800 border-transparent';
+
                                                                 return (
                                                                     <tr key={idx} className="border-b bg-white hover:bg-gray-50 transition-colors">
                                                                         <td className="p-2 border text-center font-bold text-gray-400">{idx + 1}</td>
@@ -1099,7 +1128,7 @@
                                                                             {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') ? (
                                                                                 <div className="relative focus-within:ring-2 focus-within:ring-blue-400 rounded">
                                                                                     {/* 表面顯示的 UI (只顯示名稱與動態防呆警告) */}
-                                                                                    <div className={`w-full p-1.5 border rounded font-bold text-sm flex justify-between items-center ${memberId ? 'bg-blue-50 text-blue-800 border-blue-300' : 'bg-gray-50 text-gray-500 border-gray-200'} transition-colors`}>
+                                                                                    <div className={`w-full p-1.5 border rounded font-bold text-sm flex justify-between items-center ${memberId ? highlightClasses : 'bg-gray-50 text-gray-500 border-gray-200'} transition-all`}>
                                                                                         <span className="truncate">
                                                                                             {memberId ? (
                                                                                                 <>
@@ -1190,7 +1219,7 @@
                                                                                     </select>
                                                                                 </div>
                                                                             ) : (
-                                                                                <div className="p-1 flex items-center space-x-2">
+                                                                                <div className={`p-1 flex items-center space-x-2 ${isMyChar ? highlightClassesReadOnly : ''}`}>
                                                                                     {char ? (
                                                                                         <span className="font-bold text-gray-800">{char.name} {warningText && <span className="text-orange-500 text-xs ml-1">{warningText}</span>}</span>
                                                                                     ) : <span className="text-gray-400">-</span>}
@@ -1287,12 +1316,31 @@
                                 <button onClick={handleAddBoss} className="bg-red-600 text-white px-5 py-2 rounded font-bold hover:bg-red-700 h-[42px] shadow">新增王團</button>
                             </div>
                             <div className="flex flex-wrap gap-3 mt-6">
-                                {bosses.map(boss => (
+                                {bosses.map((boss, idx) => (
                                     <div key={boss.id} style={{ borderColor: boss.color, backgroundColor: boss.color + '10' }} className="border-2 px-3 py-2 rounded flex items-center space-x-2 shadow-sm">
                                         <span className="text-xl drop-shadow-sm">{boss.icon}</span>
                                         <span className="font-bold" style={{ color: boss.color }}>{boss.name}</span>
+                                        
+                                        {/* 新增：調整王團順序的按鈕 */}
+                                        <div className="flex flex-col ml-2 border-l pl-2 border-gray-300/50">
+                                            <div className="flex space-x-1">
+                                                <button onClick={() => {
+                                                    if (idx === 0) return;
+                                                    const newB = [...bosses];
+                                                    [newB[idx - 1], newB[idx]] = [newB[idx], newB[idx - 1]];
+                                                    setBosses(newB);
+                                                }} className="text-gray-400 hover:text-blue-600 font-black text-xs" title="往上移">▲</button>
+                                                <button onClick={() => {
+                                                    if (idx === bosses.length - 1) return;
+                                                    const newB = [...bosses];
+                                                    [newB[idx + 1], newB[idx]] = [newB[idx], newB[idx + 1]];
+                                                    setBosses(newB);
+                                                }} className="text-gray-400 hover:text-blue-600 font-black text-xs" title="往下移">▼</button>
+                                            </div>
+                                        </div>
+
                                         <button 
-                                            className="text-red-500 hover:text-red-700 font-black ml-2 opacity-50 hover:opacity-100"
+                                            className="text-red-500 hover:text-red-700 font-black ml-1 opacity-50 hover:opacity-100"
                                             onClick={() => setBosses(bosses.filter(b => b.id !== boss.id))}
                                             title="刪除"
                                         >✕</button>
