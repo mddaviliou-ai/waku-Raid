@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公會王團報名排班系統</title>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入 React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- 引入 Babel 讓瀏覽器可以編譯 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+        .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        // 導入 Firebase 雲端服務
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getFirestore, doc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+        const { useState, useEffect, useMemo } = React;
+
+        // --- 初始化 Firebase 環境 ---
+        let db, auth, appId;
+        
+        // ⚠️【實際上線修改區】⚠️
+        // 當您要把這個網頁放到 Netlify 發布時，請把 null 替換成您在 Firebase 取得的 Config (不要引號)
+        // 範例：const myFirebaseConfig = { apiKey: "AIza...", projectId: "waku-raid...", ... };
+        const myFirebaseConfig = {
+          apiKey: "AIzaSyCJ5fCwLV9RRDq9EP8ptxtr2ULGlucM7p0",
+          authDomain: "waku-raid.firebaseapp.com",
+          projectId: "waku-raid",
+          storageBucket: "waku-raid.firebasestorage.app",
+          messagingSenderId: "518269067136",
+          appId: "1:518269067136:web:12990425af05581a83eb65",
+          measurementId: "G-483JD2VM1B"
+        };
+
+        try {
+            // 這裡保留了預覽測試環境的相容性，如果您填了 myFirebaseConfig 就會優先使用您專屬的資料庫！
+            const envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+            const finalConfig = myFirebaseConfig || envConfig;
+
+            if (finalConfig) {
+                const app = initializeApp(finalConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                // 使用自訂資料庫時，給予一個專屬的 appId 路徑
+                appId = (typeof __app_id !== 'undefined' && !myFirebaseConfig) ? __app_id : 'waku-raid-custom-app';
+            }
+        } catch (e) {
+            console.error("Firebase 連線初始化失敗", e);
+        }
+
+        // --- 模擬資料庫 ---
+        // 0. 王團種類 
+        const initialBosses = [
+            { id: 'b_zakum', name: '殘暴炎魔', icon: '🔥', color: '#ef4444' },
+            { id: 'b_pap_n', name: '拉圖斯(普通)', icon: '⏰', color: '#3b82f6' },
+            { id: 'b_pap_h', name: '拉圖斯(困難)', icon: '😈', color: '#8b5cf6' }
+        ];
+
+        // 1. 玩家帳號 
+        const initialAccounts = [
+            { id: 'a1', playerName: '熱狗(玩家)', role: 'member' },
+            { id: 'a2', playerName: '阿默(玩家)', role: 'member' },
+            { id: 'a3', playerName: '雞柳(玩家)', role: 'admin' },
+            { id: 'a4', playerName: '六萬六(玩家)', role: 'subadmin' }
+        ];
+
+        // 2. 職業分類 (預建所有三轉/四轉職業與顏色)
+        const initialJobCategories = [
+            // 劍士系 (紅色)
+            { id: 'jc_w_1', group: '劍士系', name: '龍騎士', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
+            { id: 'jc_w_2', group: '劍士系', name: '黑騎士', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
+            { id: 'jc_w_3', group: '劍士系', name: '十字軍', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
+            { id: 'jc_w_4', group: '劍士系', name: '英雄', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
+            { id: 'jc_w_5', group: '劍士系', name: '騎士', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
+            { id: 'jc_w_6', group: '劍士系', name: '聖騎士', bgColor: '#fee2e2', textColor: '#991b1b', borderColor: '#fca5a5' },
+            // 法師系 (藍色)
+            { id: 'jc_m_1', group: '法師系', name: '冰雷', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
+            { id: 'jc_m_2', group: '法師系', name: '冰雷大魔導', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
+            { id: 'jc_m_3', group: '法師系', name: '火毒', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
+            { id: 'jc_m_4', group: '法師系', name: '火毒大魔導', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
+            { id: 'jc_m_5', group: '法師系', name: '祭司', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
+            { id: 'jc_m_6', group: '法師系', name: '主教', bgColor: '#dbeafe', textColor: '#1e3a8a', borderColor: '#93c5fd' },
+            // 弓箭手 (綠色)
+            { id: 'jc_b_1', group: '弓箭手', name: '遊俠', bgColor: '#dcfce7', textColor: '#166534', borderColor: '#86efac' },
+            { id: 'jc_b_2', group: '弓箭手', name: '箭神', bgColor: '#dcfce7', textColor: '#166534', borderColor: '#86efac' },
+            { id: 'jc_b_3', group: '弓箭手', name: '狙擊手', bgColor: '#dcfce7', textColor: '#166534', borderColor: '#86efac' },
+            { id: 'jc_b_4', group: '弓箭手', name: '神射手', bgColor: '#dcfce7', textColor: '#166534', borderColor: '#86efac' },
+            // 盜賊系 (紫色)
+            { id: 'jc_t_1', group: '盜賊系', name: '神偷', bgColor: '#f3e8ff', textColor: '#6b21a8', borderColor: '#d8b4fe' },
+            { id: 'jc_t_2', group: '盜賊系', name: '暗影神偷', bgColor: '#f3e8ff', textColor: '#6b21a8', borderColor: '#d8b4fe' },
+            { id: 'jc_t_3', group: '盜賊系', name: '暗殺者', bgColor: '#f3e8ff', textColor: '#6b21a8', borderColor: '#d8b4fe' },
+            { id: 'jc_t_4', group: '盜賊系', name: '夜使者', bgColor: '#f3e8ff', textColor: '#6b21a8', borderColor: '#d8b4fe' },
+            // 海盜系 (橘色)
+            { id: 'jc_p_1', group: '海盜系', name: '格鬥家', bgColor: '#ffedd5', textColor: '#9a3412', borderColor: '#fdba74' },
+            { id: 'jc_p_2', group: '海盜系', name: '拳霸', bgColor: '#ffedd5', textColor: '#9a3412', borderColor: '#fdba74' },
+            { id: 'jc_p_3', group: '海盜系', name: '神槍手', bgColor: '#ffedd5', textColor: '#9a3412', borderColor: '#fdba74' },
+            { id: 'jc_p_4', group: '海盜系', name: '槍神', bgColor: '#ffedd5', textColor: '#9a3412', borderColor: '#fdba74' }
+        ];
+
+        // 3. 遊戲角色 (對應新的 ID)
+        const initialCharacters = [
+            { id: 'c1', accountId: 'a1', name: '熱狗蛋蛋', job: '主教', jobTypeId: 'jc_m_6', level: 250 },
+            { id: 'c1_2', accountId: 'a1', name: '熱狗小號', job: '神射手', jobTypeId: 'jc_b_4', level: 230 },
+            { id: 'c2', accountId: 'a2', name: '阿默獸', job: '暗影神偷', jobTypeId: 'jc_t_2', level: 245 },
+            { id: 'c3', accountId: 'a3', name: '耶穌雞柳', job: '英雄', jobTypeId: 'jc_w_4', level: 260 },
+            { id: 'c4', accountId: 'a4', name: '六萬六的男人', job: '英雄', jobTypeId: 'jc_w_4', level: 230 },
+            { id: 'c5', accountId: 'a4', name: '六萬六分身', job: '冰雷大魔導', jobTypeId: 'jc_m_2', level: 220 }
+        ];
+
+        // 4. 報名狀態 
+        const initialAvailability = {
+            'c1': { days: [false, true, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_n', 'b_pap_h'], note: '' },
+            'c1_2': { days: [false, false, true, true, false, false, false], bosses: ['b_zakum'], note: '分身只打炎魔' },
+            'c2': { days: [true, true, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_h'], note: '有困拉練習團可+1' },
+            'c3': { days: [true, false, true, true, true, true, true], bosses: ['b_zakum', 'b_pap_h'], note: '平日2200後' },
+            'c4': { days: [true, true, true, true, false, false, false], bosses: ['b_zakum', 'b_pap_n'], note: '平日1800後' },
+            'c5': { days: [false, false, false, false, false, false, false], bosses: [], note: '長大中...' }
+        };
+
+        // 5. 群組狀態 
+        const initialGroups = [
+            { id: 'g1', bossId: 'b_zakum', name: '1.殘暴炎魔', dayIndex: 1, time: '21:30~22:00集合', members: ['c1', 'c3', 'c4', '', '', ''], reserves: [''] },
+            { id: 'g2', bossId: 'b_pap_h', name: '1.拉圖斯(困難)', dayIndex: 1, time: '21:30~22:00集合', members: ['c2', '', '', '', '', ''], reserves: [''] },
+            { id: 'g3', bossId: 'b_zakum', name: '2.殘暴炎魔', dayIndex: 2, time: '21:30~22:00集合', members: ['', '', '', '', '', ''], reserves: [''] }
+        ];
+
+        const App = () => {
+            // --- 雲端同步與授權機制 ---
+            const [user, setUser] = useState(null);
+            
+            useEffect(() => {
+                if (!auth) return;
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch(e) { console.error("認證失敗", e); }
+                };
+                initAuth();
+                const unsub = onAuthStateChanged(auth, setUser);
+                return () => unsub();
+            }, []);
+
+            // 雲端資料更新工具
+            const updateCloud = (key, val) => {
+                if (!user || !db) return;
+                // 公用資料庫路徑：依賴 appId 區分，若有自己的 config 就不會跟別人衝突
+                setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main'), { [key]: val }, { merge: true });
+            };
+
+            // 系統狀態 (全面掛載雲端自動同步)
+            const [bosses, _setBosses] = useState(initialBosses);
+            const setBosses = (val) => { _setBosses(val); updateCloud('bosses', val); };
+
+            const [jobCategories, _setJobCategories] = useState(initialJobCategories);
+            const setJobCategories = (val) => { _setJobCategories(val); updateCloud('jobCategories', val); };
+
+            const [accounts, _setAccounts] = useState(initialAccounts);
+            const setAccounts = (val) => { _setAccounts(val); updateCloud('accounts', val); };
+
+            const [characters, _setCharacters] = useState(initialCharacters);
+            const setCharacters = (val) => { _setCharacters(val); updateCloud('characters', val); };
+
+            const [availability, _setAvailability] = useState(initialAvailability);
+            const setAvailability = (val) => { _setAvailability(val); updateCloud('availability', val); };
+
+            const [groups, _setGroups] = useState(initialGroups);
+            const setGroups = (val) => { _setGroups(val); updateCloud('groups', val); };
+
+            // 動態起始日期設定
+            const [weekStartDate, _setWeekStartDate] = useState(new Date().toISOString().split('T')[0]); 
+            const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
+
+            // 即時監聽雲端資料庫變更
+            useEffect(() => {
+                if (!user || !db) return;
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main');
+                const unsub = onSnapshot(docRef, (snap) => {
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        if(data.bosses) _setBosses(data.bosses);
+                        if(data.jobCategories) _setJobCategories(data.jobCategories);
+                        if(data.accounts) _setAccounts(data.accounts);
+                        if(data.characters) _setCharacters(data.characters);
+                        if(data.availability) _setAvailability(data.availability);
+                        if(data.groups) _setGroups(data.groups);
+                        if(data.weekStartDate) _setWeekStartDate(data.weekStartDate);
+                    } else {
+                        // 若無資料，則以預設資料初始化雲端
+                        setDoc(docRef, { bosses, jobCategories, accounts, characters, availability, groups, weekStartDate });
+                    }
+                }, (err) => console.error(err));
+                return () => unsub();
+            }, [user]);
+
+            // 自動根據設定的「起始日期」往後計算產生 7 天的日子陣列
+            const days = useMemo(() => {
+                const start = new Date(weekStartDate);
+                const wdays = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+                return Array.from({length: 7}).map((_, i) => {
+                    const d = new Date(start);
+                    d.setDate(d.getDate() + i);
+                    return `${d.getMonth()+1}/${d.getDate()} ${wdays[d.getDay()]}`;
+                });
+            }, [weekStartDate]);
+            
+            // 當前登入帳號
+            const [currentAccount, setCurrentAccount] = useState(accounts[0]); 
+            const [activeTab, setActiveTab] = useState('my-schedule');
+
+            // --- 全域狀態：Modals ---
+            const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+            const [newGroup, setNewGroup] = useState({ bossId: '', name: '', dayIndex: 0, time: '' });
+
+            const [isAddCharModalOpen, setIsAddCharModalOpen] = useState(false);
+            const [newChar, setNewChar] = useState({ name: '', job: '', jobTypeId: '', level: 200 });
+            
+            // 角色編輯與刪除的狀態
+            const [editCharId, setEditCharId] = useState(null);
+            const [charToDelete, setCharToDelete] = useState(null);
+
+            const [alertMessage, setAlertMessage] = useState('');
+            const [groupToDelete, setGroupToDelete] = useState(null);
+            
+            // 換週清空確認 Modal 狀態
+            const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false); 
+
+            // 職業顏色動態渲染輔助函數
+            const getJobStyle = (typeId) => {
+                const jc = jobCategories.find(j => j.id === typeId);
+                if (jc) return { backgroundColor: jc.bgColor, color: jc.textColor, border: `1px solid ${jc.borderColor}` };
+                return { backgroundColor: '#e5e7eb', color: '#374151', border: '1px solid #d1d5db' };
+            };
+
+            const handleOpenCreateModal = (dayIdx = 0) => {
+                const defaultBossId = bosses[0]?.id || '';
+                const defaultBossName = bosses[0]?.name || '';
+                // 自動計算目前該王團已經有幾團，決定預設編號
+                const bossGroupsCount = groups.filter(g => g.bossId === defaultBossId).length;
+                const defaultGroupName = defaultBossId ? `${bossGroupsCount + 1}.${defaultBossName}` : '';
+
+                setNewGroup({ 
+                    bossId: defaultBossId, 
+                    name: defaultGroupName, 
+                    dayIndex: dayIdx, 
+                    time: '21:30~22:00集合' // 設定預設時間
+                });
+                setIsCreateModalOpen(true);
+            };
+
+            const handleAddGroup = () => {
+                if(!newGroup.name || !newGroup.time) {
+                    setAlertMessage('請填寫完整資訊');
+                    return;
+                }
+                setGroups([...groups, {
+                    id: 'g' + Date.now(),
+                    bossId: newGroup.bossId,
+                    name: newGroup.name,
+                    dayIndex: parseInt(newGroup.dayIndex),
+                    time: newGroup.time,
+                    members: ['', '', '', '', '', ''],
+                    reserves: ['']
+                }]);
+                setIsCreateModalOpen(false);
+            };
+
+            // 支援新增與編輯角色
+            const handleAddCharacter = () => {
+                if(!newChar.name || !newChar.job || !newChar.jobTypeId) {
+                    setAlertMessage('請填寫完整角色名稱並選擇職業');
+                    return;
+                }
+
+                if (editCharId) {
+                    // 編輯模式
+                    setCharacters(characters.map(c => c.id === editCharId ? { 
+                        ...c, 
+                        name: newChar.name, 
+                        job: newChar.job, 
+                        jobTypeId: newChar.jobTypeId, 
+                        level: parseInt(newChar.level) 
+                    } : c));
+                } else {
+                    // 新增模式
+                    const newCharId = 'c_' + Date.now();
+                    setCharacters([...characters, { 
+                        id: newCharId, 
+                        accountId: currentAccount.id, 
+                        name: newChar.name, 
+                        job: newChar.job, 
+                        jobTypeId: newChar.jobTypeId, 
+                        level: parseInt(newChar.level) 
+                    }]);
+                    
+                    // 幫新角色建立預設的報名空資料
+                    setAvailability({
+                        ...availability,
+                        [newCharId]: { days: Array(7).fill(false), bosses: [], note: '' }
+                    });
+                }
+                
+                setIsAddCharModalOpen(false);
+                setEditCharId(null);
+            };
+
+            // 確認刪除角色邏輯
+            const confirmDeleteChar = () => {
+                if (!charToDelete) return;
+                
+                // 1. 從角色清單移除
+                setCharacters(characters.filter(c => c.id !== charToDelete));
+                
+                // 2. 從已排好的王團中清空該角色
+                const newGroups = groups.map(g => ({
+                    ...g,
+                    members: g.members.map(m => m === charToDelete ? '' : m),
+                    reserves: g.reserves.map(m => m === charToDelete ? '' : m)
+                }));
+                setGroups(newGroups);
+                
+                setCharToDelete(null);
+            };
+
+            // 將職業分類分組 (供選單使用)
+            const groupedJobs = jobCategories.reduce((acc, jc) => {
+                const g = jc.group || '其他';
+                if (!acc[g]) acc[g] = [];
+                acc[g].push(jc);
+                return acc;
+            }, {});
+
+            // --- 元件：權限模擬器 ---
+            const RoleSimulator = () => (
+                <div className="bg-gray-800 text-white p-3 flex items-center justify-between text-sm">
+                    <div className="flex items-center space-x-4">
+                        <span className="font-bold text-yellow-400">⚙️ 權限測試模擬器</span>
+                        <span>切換登入帳號：</span>
+                        <select 
+                            className="bg-gray-700 text-white p-1 rounded"
+                            value={currentAccount.id}
+                            onChange={(e) => {
+                                const acc = accounts.find(a => a.id === e.target.value);
+                                setCurrentAccount(acc);
+                                if (acc.role === 'member') setActiveTab('my-schedule');
+                                else setActiveTab('matrix');
+                            }}
+                        >
+                            {accounts.map(acc => (
+                                <option key={acc.id} value={acc.id}>
+                                    {acc.playerName} ({acc.role === 'admin' ? '管理員' : acc.role === 'subadmin' ? '副管理員' : '一般會員'})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="text-gray-300">
+                        目前權限：<span className="font-bold text-white">{currentAccount.role.toUpperCase()}</span>
+                    </div>
+                </div>
+            );
+
+            // --- 元件：會員報名頁面 ---
+            const MemberSchedule = () => {
+                const myCharacters = characters.filter(c => c.accountId === currentAccount.id);
+
+                const toggleDay = (charId, index) => {
+                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], note: '' };
+                    const newDays = [...charAvail.days];
+                    newDays[index] = !newDays[index];
+                    setAvailability({ ...availability, [charId]: { ...charAvail, days: newDays } });
+                };
+
+                const toggleBoss = (charId, bossId) => {
+                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], note: '' };
+                    const currentBosses = charAvail.bosses || [];
+                    const newBosses = currentBosses.includes(bossId) 
+                        ? currentBosses.filter(id => id !== bossId) 
+                        : [...currentBosses, bossId];
+                    setAvailability({ ...availability, [charId]: { ...charAvail, bosses: newBosses } });
+                };
+
+                const updateNote = (charId, e) => {
+                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], note: '' };
+                    setAvailability({ ...availability, [charId]: { ...charAvail, note: e.target.value } });
+                };
+
+                return (
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
+                            <h2 className="text-2xl font-bold text-gray-800">我的報名表</h2>
+                            <button onClick={() => {
+                                setEditCharId(null);
+                                setNewChar({ name: '', job: '', jobTypeId: '', level: 200 });
+                                setIsAddCharModalOpen(true);
+                            }} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 shadow transition-colors">
+                                + 新增角色
+                            </button>
+                        </div>
+
+                        {myCharacters.map((char) => {
+                            const charAvail = availability[char.id] || { days: Array(7).fill(false), bosses: [], note: '' };
+                            return (
+                                <div key={char.id} className="bg-white p-6 rounded-lg shadow border border-gray-100">
+                                    <div className="mb-4 flex justify-between items-center border-b pb-2">
+                                        <div className="flex items-center space-x-3">
+                                            <span className="font-bold text-xl">{char.name}</span>
+                                            <span style={getJobStyle(char.jobTypeId)} className="px-2 py-1 rounded text-xs font-bold shadow-sm">
+                                                {char.job} (Lv.{char.level})
+                                            </span>
+                                        </div>
+                                        <div className="flex space-x-2">
+                                            <button onClick={() => {
+                                                setEditCharId(char.id);
+                                                setNewChar({ name: char.name, job: char.job, jobTypeId: char.jobTypeId, level: char.level });
+                                                setIsAddCharModalOpen(true);
+                                            }} className="text-gray-500 hover:text-blue-600 font-bold text-sm px-3 py-1 bg-gray-100 hover:bg-blue-50 rounded transition-colors border border-gray-200">
+                                                編輯
+                                            </button>
+                                            <button onClick={() => setCharToDelete(char.id)} className="text-gray-500 hover:text-red-600 font-bold text-sm px-3 py-1 bg-gray-100 hover:bg-red-50 rounded transition-colors border border-gray-200">
+                                                刪除
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* 王團選擇 */}
+                                    <div className="mb-6 bg-orange-50 p-4 rounded-lg border border-orange-100">
+                                        <h3 className="font-bold text-orange-800 mb-3">請選擇此角色本週想打的王 (可複選)：</h3>
+                                        <div className="flex flex-wrap gap-4">
+                                            {bosses.map(boss => {
+                                                const isChecked = (charAvail.bosses || []).includes(boss.id);
+                                                return (
+                                                    <label key={boss.id} style={{ borderColor: isChecked ? boss.color : '#e5e7eb' }} className={`flex items-center space-x-2 cursor-pointer bg-white px-3 py-2 rounded border transition-all ${isChecked ? 'shadow-md scale-105' : 'hover:bg-gray-50'}`}>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="w-4 h-4 rounded"
+                                                            checked={isChecked}
+                                                            onChange={() => toggleBoss(char.id, boss.id)}
+                                                        />
+                                                        <span className="font-bold" style={{ color: boss.color }}>{boss.icon} {boss.name}</span>
+                                                    </label>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* 日期選擇 */}
+                                    <div className="mb-4">
+                                        <h3 className="font-bold text-gray-700 mb-2">請勾選可出團的日期：</h3>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                                            {days.map((day, index) => (
+                                                <label key={index} className={`cursor-pointer border rounded-lg p-3 flex flex-col items-center justify-center transition-colors ${charAvail.days[index] ? 'bg-blue-50 border-blue-400' : 'bg-gray-50 hover:bg-gray-100'}`}>
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="w-5 h-5 mb-1 text-blue-600"
+                                                        checked={charAvail.days[index]}
+                                                        onChange={() => toggleDay(char.id, index)}
+                                                    />
+                                                    <span className="font-bold text-sm text-gray-800">{day.split(' ')[0]}</span>
+                                                    <span className="text-xs text-gray-500">({day.split(' ')[1]})</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="mb-2">
+                                        <input 
+                                            type="text" 
+                                            className="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            value={charAvail.note}
+                                            onChange={(e) => updateNote(char.id, e)}
+                                            placeholder="時間備註 (例如：晚上9點後)"
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        <div className="text-right">
+                            <button onClick={() => setAlertMessage('報名資料已成功儲存！')} className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-lg">
+                                儲存報名資料
+                            </button>
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- 元件：報名總表 ---
+            const AvailabilityMatrix = ({ onOpenCreateModal }) => {
+                const assignCharToGroup = (charId, groupId) => {
+                    if (!groupId) return;
+                    const group = groups.find(g => g.id === groupId);
+                    const emptyIdx = group.members.findIndex(m => m === '');
+                    
+                    if (emptyIdx === -1) {
+                        setAlertMessage(`「${group.name}」的正式隊員已滿！\n請至「王團編組排班」頁面手動將其加入候補。`);
+                        return;
+                    }
+                    
+                    const newGroups = groups.map(g => {
+                        if (g.id === groupId) {
+                            const newMembers = [...g.members];
+                            newMembers[emptyIdx] = charId;
+                            return { ...g, members: newMembers };
+                        }
+                        return g;
+                    });
+                    setGroups(newGroups);
+                };
+
+                const removeCharFromGroup = (charId, groupId) => {
+                    const newGroups = groups.map(g => {
+                        if (g.id === groupId) {
+                            const newMembers = g.members.map(m => m === charId ? '' : m);
+                            const newReserves = g.reserves.map(m => m === charId ? '' : m);
+                            return { ...g, members: newMembers, reserves: newReserves };
+                        }
+                        return g;
+                    });
+                    setGroups(newGroups);
+                };
+
+                return (
+                    <div className="bg-white p-6 rounded-lg shadow overflow-x-auto">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-2xl font-bold text-gray-800">所有角色報名總表</h2>
+                        </div>
+                        <table className="w-full border-collapse text-sm text-left whitespace-nowrap">
+                            <thead>
+                                <tr className="bg-orange-100 border-b-2 border-orange-300">
+                                    <th className="p-2 border">角色名稱</th>
+                                    <th className="p-2 border">職業</th>
+                                    <th className="p-2 border w-1/4">報名的王團</th>
+                                    <th className="p-2 border w-1/5">備註</th>
+                                    {days.map((day, i) => (
+                                        <th key={i} className="p-2 border text-center min-w-[90px] align-top">
+                                            <div className="font-bold text-gray-800 text-base">{day.split(' ')[0]}</div>
+                                            <div className="text-xs text-gray-500 mb-1">({day.split(' ')[1]})</div>
+                                            {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
+                                                <button
+                                                    onClick={() => onOpenCreateModal(i)}
+                                                    className="w-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] px-1 py-1 rounded hover:bg-indigo-100 font-bold transition-colors shadow-sm"
+                                                    title={`在 ${day} 建立新王團`}
+                                                >
+                                                    + 開團
+                                                </button>
+                                            )}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {characters.map(char => {
+                                    const avail = availability[char.id] || { days: Array(7).fill(false), bosses: [], note: '' };
+                                    if(!avail.days.some(d => d)) return null; 
+
+                                    return (
+                                        <tr key={char.id} className="hover:bg-gray-50 border-b">
+                                            <td className="p-2 border font-bold">
+                                                {char.name}<br/>
+                                                <span className="text-xs text-gray-400 font-normal">{accounts.find(a => a.id === char.accountId)?.playerName}</span>
+                                            </td>
+                                            <td className="p-2 border">
+                                                <span style={getJobStyle(char.jobTypeId)} className="px-2 py-1 rounded text-xs font-bold shadow-sm">{char.job}</span>
+                                            </td>
+                                            <td className="p-2 border">
+                                                <div className="flex flex-wrap gap-1">
+                                                    {(avail.bosses || []).map(bId => {
+                                                        const b = bosses.find(x => x.id === bId);
+                                                        return b ? <span key={bId} style={{ backgroundColor: b.color, color: '#ffffff' }} className="px-1.5 py-0.5 rounded text-xs font-bold shadow-sm">{b.name}</span> : null;
+                                                    })}
+                                                </div>
+                                            </td>
+                                            <td className="p-2 border text-gray-600 text-xs whitespace-normal min-w-[120px]">{avail.note}</td>
+                                            {avail.days.map((isAvail, dayIndex) => {
+                                                const charGroupsOnDay = groups.filter(g => g.dayIndex === dayIndex && (g.members.includes(char.id) || g.reserves.includes(char.id)));
+                                                const availableGroupsOnDay = groups.filter(g => 
+                                                    g.dayIndex === dayIndex && 
+                                                    !g.members.includes(char.id) && 
+                                                    !g.reserves.includes(char.id)
+                                                );
+
+                                                return (
+                                                    <td key={dayIndex} className="p-2 border text-center align-top relative min-w-[90px]">
+                                                        {isAvail ? (
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                {charGroupsOnDay.map(g => (
+                                                                    <div key={g.id} className="bg-green-100 text-green-800 text-[11px] px-1 py-0.5 rounded flex items-center justify-between w-full shadow-sm border border-green-300">
+                                                                        <span className="truncate flex-1 text-left font-bold" title={g.name}>{g.name}</span>
+                                                                        {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
+                                                                            <button onClick={() => removeCharFromGroup(char.id, g.id)} className="text-red-500 hover:text-red-700 ml-1 font-black px-1">×</button>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+
+                                                                {charGroupsOnDay.length === 0 && (
+                                                                    <div className="text-lg tracking-widest drop-shadow-sm select-none my-1">
+                                                                        {(avail.bosses || []).map(bId => bosses.find(x => x.id === bId)?.icon).join('') || <span className="font-bold text-red-500 text-sm tracking-normal">V</span>}
+                                                                    </div>
+                                                                )}
+
+                                                                {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
+                                                                    availableGroupsOnDay.length > 0 ? (
+                                                                        <select
+                                                                            className="w-full text-[11px] p-1 border border-blue-300 rounded mt-1 bg-blue-50 text-blue-700 cursor-pointer font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            value=""
+                                                                            onChange={(e) => assignCharToGroup(char.id, e.target.value)}
+                                                                            title="直接指派到王團"
+                                                                        >
+                                                                            <option value="" disabled>+ 快速指派</option>
+                                                                            {availableGroupsOnDay.map(g => {
+                                                                                const isDesired = (avail.bosses || []).includes(g.bossId);
+                                                                                return (
+                                                                                    <option key={g.id} value={g.id}>
+                                                                                        {g.name} {!isDesired ? '(未報名)' : ''}
+                                                                                    </option>
+                                                                                )
+                                                                            })}
+                                                                        </select>
+                                                                    ) : (
+                                                                        charGroupsOnDay.length === 0 && !groups.some(g => g.dayIndex === dayIndex) && (
+                                                                            <div className="w-full text-[10px] text-gray-400 text-center mt-1 bg-gray-50 border border-gray-200 rounded py-0.5" title="請先至排班頁面新增該日期的王團">
+                                                                                本日未開團
+                                                                            </div>
+                                                                        )
+                                                                    )
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-300">-</span>
+                                                        )}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                );
+            };
+
+            // --- 元件：排團管理 ---
+            const RaidPlanner = ({ onOpenCreateModal }) => {
+                const handleDeleteGroup = (groupId) => {
+                    setGroupToDelete(groupId);
+                };
+
+                const getConflictGroup = (charId, currentGroupId, dayIndex) => {
+                    if (!charId) return null;
+                    const conflict = groups.find(g => 
+                        g.id !== currentGroupId && 
+                        g.dayIndex === parseInt(dayIndex) && 
+                        (g.members.includes(charId) || g.reserves.includes(charId))
+                    );
+                    return conflict ? conflict.name : null;
+                };
+
+                const handleAssign = (groupId, slotType, slotIndex, charId) => {
+                    const newGroups = groups.map(g => {
+                        if (g.id === groupId) {
+                            const updatedList = [...g[slotType]];
+                            updatedList[slotIndex] = charId;
+                            return { ...g, [slotType]: updatedList };
+                        }
+                        return g;
+                    });
+                    setGroups(newGroups);
+                };
+
+                return (
+                    <div className="space-y-8">
+                        <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow border-l-4 border-indigo-500">
+                            <h2 className="text-2xl font-bold text-gray-800">王團編組排班 (依王團分類)</h2>
+                            {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
+                                <button onClick={() => onOpenCreateModal(0)} className="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 shadow">
+                                    + 新增隊伍
+                                </button>
+                            )}
+                        </div>
+
+                        {bosses.map(boss => {
+                            const bossGroups = groups.filter(g => g.bossId === boss.id);
+                            if(bossGroups.length === 0) return null;
+
+                            return (
+                                <div key={boss.id} className="bg-white p-5 rounded-lg shadow-md border border-gray-200">
+                                    <h3 className="text-xl font-black mb-4 border-b pb-2 flex items-center">
+                                        <span className="mr-2 text-2xl drop-shadow-sm">{boss.icon}</span> 
+                                        <span style={{ color: boss.color }}>{boss.name}</span>
+                                    </h3>
+                                    
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        {bossGroups.map(group => (
+                                            <div key={group.id} className="bg-gray-50 rounded-lg border border-gray-300 overflow-hidden">
+                                                <div className="bg-gray-200 border-b border-gray-300 p-3 flex justify-between items-center">
+                                                    <h4 className="font-bold text-gray-800">{group.name}</h4>
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className="text-sm font-bold text-indigo-700 bg-white px-2 py-1 rounded border border-indigo-200">
+                                                            {days[group.dayIndex].split(' ')[0]} ({days[group.dayIndex].split(' ')[1]}) | {group.time}
+                                                        </div>
+                                                        {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
+                                                            <button 
+                                                                onClick={() => handleDeleteGroup(group.id)} 
+                                                                className="text-red-600 hover:text-white hover:bg-red-600 border border-red-300 px-2 rounded text-xs py-1 transition-colors"
+                                                                title="刪除隊伍"
+                                                            >
+                                                                刪除
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="p-3">
+                                                    <table className="w-full text-sm mb-2">
+                                                        <thead>
+                                                            <tr className="bg-white">
+                                                                <th className="p-2 text-left w-12 border">隊員</th>
+                                                                <th className="p-2 text-left border w-1/2">選擇角色 (⚠️顯示衝堂警告)</th>
+                                                                <th className="p-2 text-left border">報名備註</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {group.members.map((memberId, idx) => {
+                                                                const char = characters.find(c => c.id === memberId);
+                                                                const avail = char ? availability[char.id] : null;
+                                                                return (
+                                                                    <tr key={idx} className="border-b bg-white">
+                                                                        <td className="p-2 border text-center font-bold text-gray-500">{idx + 1}</td>
+                                                                        <td className="p-1 border">
+                                                                            {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') ? (
+                                                                                <select 
+                                                                                    className={`w-full p-2 border rounded font-medium ${memberId ? 'bg-blue-50' : 'bg-white'}`}
+                                                                                    value={memberId}
+                                                                                    onChange={(e) => handleAssign(group.id, 'members', idx, e.target.value)}
+                                                                                >
+                                                                                    <option value="">- 選擇隊員 -</option>
+                                                                                    {characters.map(c => {
+                                                                                        const conflictName = getConflictGroup(c.id, group.id, group.dayIndex);
+                                                                                        const warningText = conflictName ? `(⚠️本日已排: ${conflictName})` : '';
+                                                                                        return (
+                                                                                            <option key={c.id} value={c.id}>
+                                                                                                [{c.job}] {c.name} {warningText}
+                                                                                            </option>
+                                                                                        )
+                                                                                    })}
+                                                                                </select>
+                                                                            ) : (
+                                                                                <div className="p-1 flex items-center space-x-2">
+                                                                                    {char ? (
+                                                                                        <>
+                                                                                            <span style={getJobStyle(char.jobTypeId)} className="px-2 py-1 rounded text-xs font-bold shadow-sm">{char.job}</span>
+                                                                                            <span className="font-bold">{char.name}</span>
+                                                                                        </>
+                                                                                    ) : '-'}
+                                                                                </div>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="p-2 border text-xs text-gray-500 truncate max-w-[120px]">{avail ? avail.note : ''}</td>
+                                                                    </tr>
+                                                                )
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
+            };
+
+             // --- 元件：系統與權限管理 (僅管理員) ---
+             const SystemManagement = () => {
+                const [newBossName, setNewBossName] = useState('');
+                const [newBossIcon, setNewBossIcon] = useState('🔥');
+                const [newBossColor, setNewBossColor] = useState('#ef4444');
+
+                // 新增職業類別的狀態
+                const [newJobCatName, setNewJobCatName] = useState('');
+                const [newJobCatBg, setNewJobCatBg] = useState('#dbeafe');
+                const [newJobCatText, setNewJobCatText] = useState('#1e3a8a');
+
+                const handleAddBoss = () => {
+                    if(!newBossName || !newBossIcon) return;
+                    setBosses([...bosses, { id: 'b_' + Date.now(), name: newBossName, icon: newBossIcon, color: newBossColor }]);
+                    setNewBossName('');
+                };
+
+                const handleAddJobCat = () => {
+                    if(!newJobCatName) return;
+                    setJobCategories([...jobCategories, { 
+                        id: 'jc_' + Date.now(), 
+                        group: '自訂/其他', 
+                        name: newJobCatName, 
+                        bgColor: newJobCatBg, 
+                        textColor: newJobCatText, 
+                        borderColor: newJobCatText 
+                    }]);
+                    setNewJobCatName('');
+                };
+
+                return (
+                    <div className="space-y-6">
+                        {/* 系統設定 (王團管理) */}
+                        <div className="bg-white p-6 rounded-lg shadow border-t-4 border-red-500">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">系統設定 - 王團種類管理</h2>
+                            <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 p-4 rounded border">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">圖案 (Emoji)</label>
+                                    <input type="text" className="border p-2 rounded w-20 text-center text-xl" value={newBossIcon} onChange={(e) => setNewBossIcon(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">王團名稱</label>
+                                    <input type="text" className="border p-2 rounded w-48" placeholder="例: 混沌黑龍" value={newBossName} onChange={(e) => setNewBossName(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">名稱顏色</label>
+                                    <input type="color" className="border p-1 rounded w-16 h-[42px] cursor-pointer" value={newBossColor} onChange={(e) => setNewBossColor(e.target.value)} />
+                                </div>
+                                <button onClick={handleAddBoss} className="bg-red-600 text-white px-5 py-2 rounded font-bold hover:bg-red-700 h-[42px] shadow">新增王團</button>
+                            </div>
+                            <div className="flex flex-wrap gap-3 mt-6">
+                                {bosses.map(boss => (
+                                    <div key={boss.id} style={{ borderColor: boss.color, backgroundColor: boss.color + '10' }} className="border-2 px-3 py-2 rounded flex items-center space-x-2 shadow-sm">
+                                        <span className="text-xl drop-shadow-sm">{boss.icon}</span>
+                                        <span className="font-bold" style={{ color: boss.color }}>{boss.name}</span>
+                                        <button 
+                                            className="text-red-500 hover:text-red-700 font-black ml-2 opacity-50 hover:opacity-100"
+                                            onClick={() => setBosses(bosses.filter(b => b.id !== boss.id))}
+                                            title="刪除"
+                                        >✕</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 系統設定 (職業分類管理) */}
+                        <div className="bg-white p-6 rounded-lg shadow border-t-4 border-green-500">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">系統設定 - 職業分類標籤管理</h2>
+                            <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 p-4 rounded border">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">自訂職業名稱</label>
+                                    <input type="text" className="border p-2 rounded w-40" placeholder="例: 神之子" value={newJobCatName} onChange={(e) => setNewJobCatName(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">背景顏色</label>
+                                    <input type="color" className="border p-1 rounded w-16 h-[42px] cursor-pointer" value={newJobCatBg} onChange={(e) => setNewJobCatBg(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">文字外框顏色</label>
+                                    <input type="color" className="border p-1 rounded w-16 h-[42px] cursor-pointer" value={newJobCatText} onChange={(e) => setNewJobCatText(e.target.value)} />
+                                </div>
+                                <button onClick={handleAddJobCat} className="bg-green-600 text-white px-5 py-2 rounded font-bold hover:bg-green-700 h-[42px] shadow">新增職業分類</button>
+                            </div>
+                            
+                            {/* 按組別呈現職業標籤 */}
+                            <div className="space-y-4 mt-6">
+                                {Object.entries(groupedJobs).map(([groupName, jobs]) => (
+                                    <div key={groupName} className="border border-gray-200 p-4 rounded bg-white shadow-sm">
+                                        <h3 className="text-sm font-bold text-gray-500 mb-3 border-b pb-1">{groupName}</h3>
+                                        <div className="flex flex-wrap gap-2">
+                                            {jobs.map(jc => (
+                                                <div key={jc.id} className="border px-2 py-1 rounded flex items-center space-x-1 shadow-sm text-sm transition-all hover:scale-105" style={{ backgroundColor: jc.bgColor, borderColor: jc.borderColor }}>
+                                                    <span className="font-bold" style={{ color: jc.textColor }}>{jc.name}</span>
+                                                    <button 
+                                                        className="text-gray-500 hover:text-red-600 font-black ml-1 opacity-60 hover:opacity-100"
+                                                        onClick={() => setJobCategories(jobCategories.filter(j => j.id !== jc.id))}
+                                                        title="刪除"
+                                                    >✕</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 新增：系統設定 (排班日期與換週設定) */}
+                        <div className="bg-white p-6 rounded-lg shadow border-t-4 border-yellow-500">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">系統設定 - 排班日期與換週</h2>
+                            <div className="flex flex-wrap gap-4 items-end bg-gray-50 p-4 rounded border">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">本週起始日期 (通常設為週四)</label>
+                                    <input type="date" className="border p-2 rounded h-[42px] cursor-pointer" value={weekStartDate} onChange={(e) => setWeekStartDate(e.target.value)} />
+                                </div>
+                                <div className="ml-auto">
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">重置動作</label>
+                                    <button onClick={() => setIsConfirmResetOpen(true)} className="bg-yellow-600 text-white px-5 py-2 rounded font-bold hover:bg-yellow-700 shadow h-[42px] flex items-center transition-all">
+                                        <span className="mr-2">⚠️</span> 清空報名表單與王團名單
+                                    </button>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-500 mt-2">💡 提示：更改起始日期後，所有頁面的日期將會自動順延 7 天。準備開新團前，請點擊「清空報名表單」將所有人舊的打勾紀錄歸零。</p>
+                        </div>
+
+                        {/* 帳號權限管理 */}
+                        <div className="bg-white p-6 rounded-lg shadow border-t-4 border-blue-500">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">公會帳號權限管理</h2>
+                            <table className="w-full border-collapse text-sm text-left">
+                                <thead>
+                                    <tr className="bg-gray-100 border-b">
+                                        <th className="p-3 border">玩家(帳號)名稱</th>
+                                        <th className="p-3 border">系統權限</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {accounts.map(acc => (
+                                        <tr key={acc.id} className="hover:bg-gray-50 border-b">
+                                            <td className="p-3 border font-medium">{acc.playerName}</td>
+                                            <td className="p-3 border">
+                                                <select 
+                                                    className="border p-1 rounded bg-white"
+                                                    value={acc.role}
+                                                    onChange={(e) => {
+                                                        const newAccs = accounts.map(a => a.id === acc.id ? {...a, role: e.target.value} : a);
+                                                        setAccounts(newAccs);
+                                                        if(currentAccount.id === acc.id) setCurrentAccount({...acc, role: e.target.value});
+                                                    }}
+                                                >
+                                                    <option value="member">一般會員</option>
+                                                    <option value="subadmin">副管理員</option>
+                                                    <option value="admin">管理員</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                );
+            };
+
+            // 導覽列
+            const navItems = [];
+            if (currentAccount.role === 'member') {
+                navItems.push({ id: 'my-schedule', label: '我的報名表' });
+                navItems.push({ id: 'planner', label: '查看王團名單' });
+            } else if (currentAccount.role === 'subadmin') {
+                navItems.push({ id: 'matrix', label: '成員報名總表' });
+                navItems.push({ id: 'planner', label: '王團編組排班' });
+            } else if (currentAccount.role === 'admin') {
+                navItems.push({ id: 'matrix', label: '成員報名總表' });
+                navItems.push({ id: 'planner', label: '王團編組排班' });
+                navItems.push({ id: 'system', label: '系統與權限管理' });
+            }
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    <RoleSimulator />
+                    
+                    <header className="bg-white shadow-sm border-b">
+                        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+                            <h1 className="text-xl font-black text-gray-800 flex items-center">
+                                <span className="text-2xl mr-2">⚔️</span> 公會綜合王團排班系統
+                            </h1>
+                            <div className="flex items-center space-x-3">
+                                <div className="text-right">
+                                    <div className="font-bold text-gray-800">{currentAccount.playerName}</div>
+                                    <div className="text-xs text-gray-500">
+                                        {currentAccount.role === 'admin' ? '管理員' : currentAccount.role === 'subadmin' ? '副管理員' : '一般會員'}
+                                    </div>
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-600 border-2 border-blue-300">
+                                    {currentAccount.playerName.charAt(0)}
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <div className="bg-white shadow-sm mb-6">
+                        <div className="max-w-7xl mx-auto px-4 flex space-x-6">
+                            {navItems.map(item => (
+                                <button
+                                    key={item.id}
+                                    className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+                                        activeTab === item.id 
+                                        ? 'border-blue-500 text-blue-600' 
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    }`}
+                                    onClick={() => setActiveTab(item.id)}
+                                >
+                                    {item.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <main className="flex-grow max-w-7xl mx-auto px-4 w-full pb-10">
+                        {activeTab === 'my-schedule' && <MemberSchedule />}
+                        {activeTab === 'matrix' && <AvailabilityMatrix onOpenCreateModal={handleOpenCreateModal} />}
+                        {activeTab === 'planner' && <RaidPlanner onOpenCreateModal={handleOpenCreateModal} />}
+                        {activeTab === 'system' && <SystemManagement />}
+                    </main>
+
+                    {/* 新增/編輯角色 Modal */}
+                    {isAddCharModalOpen && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md border-t-8 border-blue-500">
+                                <h2 className="text-2xl font-black mb-4 flex items-center">
+                                    <span className="text-blue-500 mr-2">{editCharId ? '✏️' : '➕'}</span> 
+                                    {editCharId ? '編輯遊戲角色' : '新增遊戲角色'}
+                                </h2>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">角色名稱 (ID)</label>
+                                        <input type="text" className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" placeholder="輸入遊戲ID" value={newChar.name} onChange={e => setNewChar({...newChar, name: e.target.value})} />
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <div className="flex-1">
+                                            <label className="block text-sm font-bold text-gray-700 mb-1">職業 (三轉/四轉)</label>
+                                            <select 
+                                                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 font-medium" 
+                                                value={newChar.jobTypeId} 
+                                                onChange={e => {
+                                                    const selected = jobCategories.find(jc => jc.id === e.target.value);
+                                                    setNewChar({...newChar, jobTypeId: e.target.value, job: selected ? selected.name : ''})
+                                                }}
+                                            >
+                                                <option value="" disabled>-- 選擇職業 --</option>
+                                                {Object.entries(groupedJobs).map(([groupName, jobs]) => (
+                                                    <optgroup key={groupName} label={groupName}>
+                                                        {jobs.map(jc => <option key={jc.id} value={jc.id}>{jc.name}</option>)}
+                                                    </optgroup>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="w-24">
+                                            <label className="block text-sm font-bold text-gray-700 mb-1">等級</label>
+                                            <input type="number" className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" value={newChar.level} onChange={e => setNewChar({...newChar, level: e.target.value})} />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-6 flex justify-end space-x-3">
+                                    <button onClick={() => setIsAddCharModalOpen(false)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={handleAddCharacter} className="px-5 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 shadow transition-colors">
+                                        {editCharId ? '儲存修改' : '確認新增'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 新增王團 Modal */}
+                    {isCreateModalOpen && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md border-t-8 border-indigo-500">
+                                <h2 className="text-2xl font-black mb-4 flex items-center"><span className="text-indigo-500 mr-2">✚</span> 新增王團隊伍</h2>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">選擇王團</label>
+                                        <select 
+                                            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500" 
+                                            value={newGroup.bossId} 
+                                            onChange={e => {
+                                                const newBossId = e.target.value;
+                                                const newBoss = bosses.find(b => b.id === newBossId);
+                                                // 切換王團時，動態更新預設隊伍名稱
+                                                const bossGroupsCount = groups.filter(g => g.bossId === newBossId).length;
+                                                const defaultGroupName = newBoss ? `${bossGroupsCount + 1}.${newBoss.name}` : '';
+                                                setNewGroup({...newGroup, bossId: newBossId, name: defaultGroupName});
+                                            }}
+                                        >
+                                            {bosses.map(b => <option key={b.id} value={b.id}>{b.icon} {b.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">隊伍名稱 (可自訂修改)</label>
+                                        <input type="text" className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500" placeholder="例: 1.殘暴炎魔" value={newGroup.name} onChange={e => setNewGroup({...newGroup, name: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">出團日期</label>
+                                        <select className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 font-medium text-indigo-700" value={newGroup.dayIndex} onChange={e => setNewGroup({...newGroup, dayIndex: e.target.value})}>
+                                            {days.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">詳細時間說明 (可自訂修改)</label>
+                                        <input type="text" className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500" placeholder="例: 21:30~22:00集合" value={newGroup.time} onChange={e => setNewGroup({...newGroup, time: e.target.value})} />
+                                    </div>
+                                </div>
+                                <div className="mt-6 flex justify-end space-x-3">
+                                    <button onClick={() => setIsCreateModalOpen(false)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={handleAddGroup} className="px-5 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700 shadow transition-colors">確認建立</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 自訂 Alert Modal (系統提示) */}
+                    {alertMessage && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
+                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-yellow-500">
+                                <h2 className="text-xl font-black mb-4 flex items-center text-yellow-600">⚠️ 系統提示</h2>
+                                <p className="mb-6 text-gray-700 whitespace-pre-line">{alertMessage}</p>
+                                <div className="flex justify-end">
+                                    <button onClick={() => setAlertMessage('')} className="px-5 py-2 bg-yellow-500 text-white rounded font-bold hover:bg-yellow-600 transition-colors">確認</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 自訂 Confirm Modal (隊伍刪除確認) */}
+                    {groupToDelete && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
+                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500">
+                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600">🚨 刪除確認</h2>
+                                <p className="mb-6 text-gray-700">確定要刪除這個隊伍嗎？<br/><span className="text-red-500 font-bold">此操作無法復原。</span></p>
+                                <div className="flex justify-end space-x-3">
+                                    <button onClick={() => setGroupToDelete(null)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={() => {
+                                        setGroups(groups.filter(g => g.id !== groupToDelete));
+                                        setGroupToDelete(null);
+                                    }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 自訂 Confirm Modal (角色刪除確認) */}
+                    {charToDelete && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
+                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500">
+                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600">🚨 刪除角色確認</h2>
+                                <p className="mb-6 text-gray-700">確定要刪除該角色嗎？<br/><span className="text-red-500 font-bold">這將會同時將其從已排入的王團中移除。</span></p>
+                                <div className="flex justify-end space-x-3">
+                                    <button onClick={() => setCharToDelete(null)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={confirmDeleteChar} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 自訂 Confirm Modal (換週清空確認) */}
+                    {isConfirmResetOpen && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
+                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-yellow-500">
+                                <h2 className="text-xl font-black mb-4 flex items-center text-yellow-600">⚠️ 換週清空確認</h2>
+                                <p className="mb-6 text-gray-700">確定要清空所有人的報名資料與王團名單嗎？<br/><span className="text-red-500 font-bold">此操作將重置全部表單，無法復原！</span></p>
+                                <div className="flex justify-end space-x-3">
+                                    <button onClick={() => setIsConfirmResetOpen(false)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={() => {
+                                        const newAvail = {};
+                                        characters.forEach(c => {
+                                            newAvail[c.id] = { days: Array(7).fill(false), bosses: [], note: '' };
+                                        });
+                                        setAvailability(newAvail); // 自動同步至雲端
+                                        setGroups([]);             // 自動同步至雲端
+                                        setIsConfirmResetOpen(false);
+                                        setAlertMessage('已成功清空所有報名資料與排班名單！大家可以開始填寫新的一週了！');
+                                    }} className="px-5 py-2 bg-yellow-600 text-white rounded font-bold hover:bg-yellow-700 shadow transition-colors">確認清空</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
