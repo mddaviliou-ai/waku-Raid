@@ -8,6 +8,13 @@
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- 設定 Tailwind 的深色模式策略為 'class' -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    
     <!-- 引入 React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -16,11 +23,13 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; transition: background-color 0.3s; }
+        .dark body { background-color: #111827; }
         .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; font-weight: bold; }
+        .dark .tab-active { border-bottom: 2px solid #60a5fa; color: #60a5fa; }
     </style>
 </head>
-<body>
+<body className="text-gray-800 dark:text-gray-100">
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
@@ -104,6 +113,21 @@
         const initialGroups = [];
 
         const App = () => {
+            // --- 深色模式管理 ---
+            const [darkMode, setDarkMode] = useState(() => {
+                const saved = localStorage.getItem('waku-raid-darkmode');
+                return saved === 'true';
+            });
+
+            useEffect(() => {
+                if (darkMode) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+                localStorage.setItem('waku-raid-darkmode', darkMode);
+            }, [darkMode]);
+
             // --- 雲端同步與授權機制 ---
             const [user, setUser] = useState(null);
             
@@ -149,7 +173,6 @@
             const [weekStartDate, _setWeekStartDate] = useState(new Date().toISOString().split('T')[0]); 
             const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
 
-            // 新增：全域狀態，用於記錄「成員報名總表」當前的王團分頁
             const [matrixBossTab, setMatrixBossTab] = useState('all');
 
             useEffect(() => {
@@ -214,8 +237,9 @@
 
             const getJobStyle = (typeId) => {
                 const jc = jobCategories.find(j => j.id === typeId);
-                if (jc) return { backgroundColor: jc.bgColor, color: jc.textColor, border: `1px solid ${jc.borderColor}` };
-                return { backgroundColor: '#e5e7eb', color: '#374151', border: '1px solid #d1d5db' };
+                // 在深色模式下，背景調暗一點，邊框與文字顏色保留
+                if (jc) return { backgroundColor: darkMode ? jc.bgColor.replace(/fff|f[0-9a-f]{2}/gi, '#374151') : jc.bgColor, color: jc.textColor, border: `1px solid ${jc.borderColor}` };
+                return { backgroundColor: darkMode ? '#374151' : '#e5e7eb', color: darkMode ? '#d1d5db' : '#374151', border: '1px solid #d1d5db' };
             };
 
             const handleOpenCreateModal = (dayIdx = 0) => {
@@ -364,27 +388,33 @@
                 };
 
                 return (
-                    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 relative">
-                        <div className="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full border-t-8 border-blue-500 z-10">
-                            <h1 className="text-2xl font-black text-center mb-6 text-gray-800"><span className="text-blue-500">⚔️</span> 公會排班登入</h1>
-                            {error && <div className={`p-3 rounded mb-4 text-sm font-bold border ${error.includes('✅') ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-600 border-red-200'}`}>{error}</div>}
+                    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col items-center justify-center p-4 relative transition-colors">
+                        <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl max-w-sm w-full border-t-8 border-blue-500 z-10 transition-colors">
+                            <div className="flex justify-between items-center mb-6">
+                                <h1 className="text-2xl font-black text-gray-800 dark:text-gray-100"><span className="text-blue-500">⚔️</span> 公會排班登入</h1>
+                                <button onClick={() => setDarkMode(!darkMode)} className="text-xl p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="切換深色模式">
+                                    {darkMode ? '☀️' : '🌙'}
+                                </button>
+                            </div>
+                            
+                            {error && <div className={`p-3 rounded mb-4 text-sm font-bold border ${error.includes('✅') ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800'}`}>{error}</div>}
                             <div className="space-y-5">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">選擇您的帳號</label>
-                                    <select className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 font-medium" value={selectedAcc} onChange={e => setSelectedAcc(e.target.value)}>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">選擇您的帳號</label>
+                                    <select className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500 font-medium" value={selectedAcc} onChange={e => setSelectedAcc(e.target.value)}>
                                         <option value="" disabled>-- 請選擇帳號 --</option>
                                         {accounts.map(a => <option key={a.id} value={a.id}>{a.playerName}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">輸入登入密碼</label>
-                                    <input type="password" placeholder="預設: 一般1234 / 管理admin" className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" value={passcode} onChange={e => setPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && doLogin()} />
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">輸入登入密碼</label>
+                                    <input type="password" placeholder="預設: 一般1234 / 管理admin" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500" value={passcode} onChange={e => setPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && doLogin()} />
                                 </div>
                                 <button onClick={doLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition-colors shadow-lg mt-2">登入系統</button>
                                 
-                                <div className="text-center mt-4 pt-4 border-t border-gray-100">
-                                    <span className="text-sm text-gray-500">還沒有帳號嗎？ </span>
-                                    <button onClick={() => { setError(''); setIsRegisterOpen(true); }} className="text-blue-600 font-bold hover:underline">立即註冊</button>
+                                <div className="text-center mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                                    <span className="text-sm text-gray-500 dark:text-gray-400">還沒有帳號嗎？ </span>
+                                    <button onClick={() => { setError(''); setIsRegisterOpen(true); }} className="text-blue-600 dark:text-blue-400 font-bold hover:underline">立即註冊</button>
                                 </div>
                             </div>
                         </div>
@@ -392,33 +422,32 @@
                         {/* 註冊 Modal */}
                         {isRegisterOpen && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-                                <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-green-500">
-                                    <h2 className="text-2xl font-black mb-4 flex items-center text-gray-800">
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-green-500 transition-colors">
+                                    <h2 className="text-2xl font-black mb-4 flex items-center text-gray-800 dark:text-gray-100">
                                         <span className="text-green-500 mr-2">📝</span> 註冊新帳號
                                     </h2>
                                     <div className="space-y-4">
                                         <div>
-                                            <label className="block text-sm font-bold text-gray-700 mb-1">ID: DC名稱 (必填)</label>
-                                            <input type="text" className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-green-500" placeholder="輸入您的 Discord 名稱" value={regName} onChange={e => setRegName(e.target.value)} />
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">ID: DC名稱 (必填)</label>
+                                            <input type="text" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-green-500" placeholder="輸入您的 Discord 名稱" value={regName} onChange={e => setRegName(e.target.value)} />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-bold text-gray-700 mb-1">自訂密碼 (選填)</label>
-                                            <input type="password" className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-green-500" placeholder="若不填，預設為 1234" value={regPasscode} onChange={e => setRegPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleRegister()} />
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">自訂密碼 (選填)</label>
+                                            <input type="password" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-green-500" placeholder="若不填，預設為 1234" value={regPasscode} onChange={e => setRegPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleRegister()} />
                                         </div>
                                     </div>
                                     <div className="mt-6 flex justify-end space-x-3">
-                                        <button onClick={() => setIsRegisterOpen(false)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                        <button onClick={() => setIsRegisterOpen(false)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                         <button onClick={handleRegister} className="px-5 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow transition-colors">確認註冊</button>
                                     </div>
                                 </div>
                             </div>
                         )}
                         
-                        <div className="mt-8 text-center">
+                        <div className="mt-8 text-center hidden">
                             <button onClick={forceResetAccounts} className="text-xs text-gray-400 hover:text-gray-600 underline">
                                 🔄 載入最新預設帳號 (清除雲端舊帳號)
                             </button>
-                            <p className="text-[10px] text-gray-400 mt-1">※ 若下拉選單仍為舊名字，請點擊此按鈕進行強制更新</p>
                         </div>
                     </div>
                 );
@@ -518,8 +547,8 @@
 
                 return (
                     <div className="space-y-6">
-                        <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
-                            <h2 className="text-2xl font-bold text-gray-800">我的報名表</h2>
+                        <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-blue-500 transition-colors">
+                            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">我的報名表</h2>
                             <button onClick={() => {
                                 setEditCharId(null);
                                 setNewChar({ name: currentAccount.playerName, job: '', jobTypeId: '', level: 200 });
@@ -532,10 +561,10 @@
                         {myCharacters.map((char) => {
                             const charAvail = getAvail(char.id);
                             return (
-                                <div key={char.id} className="bg-white p-6 rounded-lg shadow border border-gray-100">
-                                    <div className="mb-4 flex justify-between items-center border-b pb-2">
+                                <div key={char.id} className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-100 dark:border-gray-700 transition-colors">
+                                    <div className="mb-4 flex justify-between items-center border-b dark:border-gray-700 pb-2">
                                         <div className="flex items-center space-x-3">
-                                            <span className="font-bold text-xl">{char.name}</span>
+                                            <span className="font-bold text-xl dark:text-gray-100">{char.name}</span>
                                             <span style={getJobStyle(char.jobTypeId)} className="px-2 py-1 rounded text-xs font-bold shadow-sm">
                                                 {char.job} (Lv.{char.level})
                                             </span>
@@ -545,41 +574,41 @@
                                                 setEditCharId(char.id);
                                                 setNewChar({ name: currentAccount.playerName, job: char.job, jobTypeId: char.jobTypeId, level: char.level });
                                                 setIsAddCharModalOpen(true);
-                                            }} className="text-gray-500 hover:text-blue-600 font-bold text-sm px-3 py-1 bg-gray-100 hover:bg-blue-50 rounded transition-colors border border-gray-200">
+                                            }} className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 font-bold text-sm px-3 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-gray-600 rounded transition-colors border border-gray-200 dark:border-gray-600">
                                                 編輯
                                             </button>
-                                            <button onClick={() => setCharToDelete(char.id)} className="text-gray-500 hover:text-red-600 font-bold text-sm px-3 py-1 bg-gray-100 hover:bg-red-50 rounded transition-colors border border-gray-200">
+                                            <button onClick={() => setCharToDelete(char.id)} className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 font-bold text-sm px-3 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-gray-600 rounded transition-colors border border-gray-200 dark:border-gray-600">
                                                 刪除
                                             </button>
                                         </div>
                                     </div>
 
                                     {/* 王團與場次選擇 */}
-                                    <div className="mb-6 bg-orange-50 p-4 rounded-lg border border-orange-100">
-                                        <h3 className="font-bold text-orange-800 mb-3">請選擇此角色本週想打的王與場次數 (可複選)：</h3>
+                                    <div className="mb-6 bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-100 dark:border-orange-800/30">
+                                        <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週想打的王與場次數 (可複選)：</h3>
                                         <div className="flex flex-wrap gap-4">
                                             {bosses.map(boss => {
                                                 const isChecked = (charAvail.bosses || []).includes(boss.id);
                                                 const count = (charAvail.bossCounts && charAvail.bossCounts[boss.id]) ? charAvail.bossCounts[boss.id] : 1;
                                                 return (
-                                                    <div key={boss.id} style={{ borderColor: isChecked ? boss.color : '#e5e7eb' }} className={`flex items-center bg-white px-3 py-2 rounded border transition-all ${isChecked ? 'shadow-md' : 'hover:bg-gray-50'}`}>
+                                                    <div key={boss.id} style={{ borderColor: isChecked ? boss.color : (darkMode ? '#4b5563' : '#e5e7eb') }} className={`flex items-center bg-white dark:bg-gray-800 px-3 py-2 rounded border transition-all ${isChecked ? 'shadow-md' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
                                                         <label className="flex items-center space-x-2 cursor-pointer flex-1 mr-2">
                                                             <input 
                                                                 type="checkbox" 
-                                                                className="w-4 h-4 rounded"
+                                                                className="w-4 h-4 rounded bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
                                                                 checked={isChecked}
                                                                 onChange={() => toggleBoss(char.id, boss.id)}
                                                             />
                                                             <span className="font-bold" style={{ color: boss.color }}>{boss.icon} {boss.name}</span>
                                                         </label>
                                                         {isChecked && (
-                                                            <div className="flex items-center border-l pl-2 border-gray-200">
-                                                                <span className="text-xs text-gray-500 mr-1">場次:</span>
+                                                            <div className="flex items-center border-l pl-2 border-gray-200 dark:border-gray-600">
+                                                                <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">場次:</span>
                                                                 <input 
                                                                     type="number" 
                                                                     min="1" 
                                                                     max="10" 
-                                                                    className="w-12 p-0.5 text-center border rounded text-xs font-bold focus:ring-1 focus:outline-none"
+                                                                    className="w-12 p-0.5 text-center border rounded text-xs font-bold focus:ring-1 focus:outline-none bg-white dark:bg-gray-700"
                                                                     style={{ borderColor: boss.color, color: boss.color }}
                                                                     value={count}
                                                                     onChange={(e) => updateBossCount(char.id, boss.id, parseInt(e.target.value) || 1)}
@@ -594,18 +623,18 @@
 
                                     {/* 日期選擇 */}
                                     <div className="mb-4">
-                                        <h3 className="font-bold text-gray-700 mb-2">請勾選可出團的日期：</h3>
+                                        <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-2">請勾選可出團的日期：</h3>
                                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                                             {days.map((day, index) => (
-                                                <label key={index} className={`cursor-pointer border rounded-lg p-3 flex flex-col items-center justify-center transition-colors ${charAvail.days[index] ? 'bg-blue-50 border-blue-400' : 'bg-gray-50 hover:bg-gray-100'}`}>
+                                                <label key={index} className={`cursor-pointer border rounded-lg p-3 flex flex-col items-center justify-center transition-colors ${charAvail.days[index] ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-400 dark:border-blue-500' : 'bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-600'}`}>
                                                     <input 
                                                         type="checkbox" 
-                                                        className="w-5 h-5 mb-1 text-blue-600"
+                                                        className="w-5 h-5 mb-1 text-blue-600 bg-gray-100 dark:bg-gray-600 border-gray-300 dark:border-gray-500"
                                                         checked={charAvail.days[index]}
                                                         onChange={() => toggleDay(char.id, index)}
                                                     />
-                                                    <span className="font-bold text-sm text-gray-800">{day.split(' ')[0]}</span>
-                                                    <span className="text-xs text-gray-500">({day.split(' ')[1]})</span>
+                                                    <span className="font-bold text-sm text-gray-800 dark:text-gray-100">{day.split(' ')[0]}</span>
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400">({day.split(' ')[1]})</span>
                                                 </label>
                                             ))}
                                         </div>
@@ -614,7 +643,7 @@
                                     <div className="mb-2">
                                         <input 
                                             type="text" 
-                                            className="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 p-2 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                             value={charAvail.note}
                                             onChange={(e) => updateNote(char.id, e)}
                                             placeholder="時間備註 (例如：晚上9點後)"
@@ -710,15 +739,15 @@
                 }, [sortedCharacters, availability, matrixBossTab]);
 
                 return (
-                    <div className="bg-white p-6 rounded-lg shadow overflow-x-auto">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow overflow-x-auto transition-colors">
                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-2xl font-bold text-gray-800">所有角色報名總表</h2>
+                            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">所有角色報名總表</h2>
                         </div>
 
                         {/* 王團過濾分頁標籤 */}
-                        <div className="flex space-x-3 mb-4 overflow-x-auto pb-2 border-b border-gray-100">
+                        <div className="flex space-x-3 mb-4 overflow-x-auto pb-2 border-b border-gray-100 dark:border-gray-700">
                             <button 
-                                className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all shadow-sm ${matrixBossTab === 'all' ? 'bg-gray-800 text-white scale-105' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                                className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all shadow-sm ${matrixBossTab === 'all' ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 scale-105' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
                                 onClick={() => setMatrixBossTab('all')}
                             >
                                 📋 報名總表
@@ -726,9 +755,9 @@
                             {bosses.map(boss => (
                                 <button 
                                     key={boss.id}
-                                    className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all shadow-sm ${matrixBossTab === boss.id ? 'scale-105' : 'hover:bg-gray-50 opacity-70 hover:opacity-100'}`}
+                                    className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all shadow-sm ${matrixBossTab === boss.id ? 'scale-105' : 'hover:bg-gray-50 dark:hover:bg-gray-700 opacity-70 hover:opacity-100'}`}
                                     style={{ 
-                                        backgroundColor: matrixBossTab === boss.id ? boss.color : '#ffffff',
+                                        backgroundColor: matrixBossTab === boss.id ? boss.color : (darkMode ? '#374151' : '#ffffff'),
                                         color: matrixBossTab === boss.id ? '#ffffff' : boss.color,
                                         border: `2px solid ${boss.color}`
                                     }}
@@ -741,12 +770,12 @@
 
                         <table className="w-full border-collapse text-sm text-left whitespace-nowrap">
                             <thead>
-                                <tr className="bg-orange-100 border-b-2 border-orange-300">
-                                    <th className="p-2 border">
+                                <tr className="bg-orange-100 dark:bg-orange-900/30 border-b-2 border-orange-300 dark:border-orange-800 text-gray-800 dark:text-gray-200">
+                                    <th className="p-2 border dark:border-gray-700">
                                         <div className="flex items-center space-x-1">
                                             <span>角色名稱</span>
                                             {/* 隱藏文字的下拉選單 */}
-                                            <div className="relative w-4 h-4 text-orange-500 hover:text-orange-700 transition-colors" title="選擇排序方式">
+                                            <div className="relative w-4 h-4 text-orange-500 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 transition-colors" title="選擇排序方式">
                                                 <select 
                                                     className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
                                                     value={sortMode === 'name' ? sortMode : 'default'}
@@ -759,11 +788,11 @@
                                             </div>
                                         </div>
                                     </th>
-                                    <th className="p-2 border">
+                                    <th className="p-2 border dark:border-gray-700">
                                         <div className="flex items-center space-x-1">
                                             <span>職業</span>
                                             {/* 隱藏文字的下拉選單 */}
-                                            <div className="relative w-4 h-4 text-orange-500 hover:text-orange-700 transition-colors" title="選擇排序方式">
+                                            <div className="relative w-4 h-4 text-orange-500 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 transition-colors" title="選擇排序方式">
                                                 <select 
                                                     className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
                                                     value={['job', 'levelDesc', 'levelAsc'].includes(sortMode) ? sortMode : 'default'}
@@ -778,16 +807,16 @@
                                             </div>
                                         </div>
                                     </th>
-                                    <th className="p-2 border w-1/4">報名的王團</th>
-                                    <th className="p-2 border w-1/5">備註</th>
+                                    <th className="p-2 border dark:border-gray-700 w-1/4">報名的王團</th>
+                                    <th className="p-2 border dark:border-gray-700 w-1/5">備註</th>
                                     {days.map((day, i) => (
-                                        <th key={i} className="p-2 border text-center min-w-[90px] align-top">
-                                            <div className="font-bold text-gray-800 text-base">{day.split(' ')[0]}</div>
-                                            <div className="text-xs text-gray-500 mb-1">({day.split(' ')[1]})</div>
+                                        <th key={i} className="p-2 border dark:border-gray-700 text-center min-w-[90px] align-top">
+                                            <div className="font-bold text-gray-800 dark:text-gray-200 text-base">{day.split(' ')[0]}</div>
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">({day.split(' ')[1]})</div>
                                             {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
                                                 <button
                                                     onClick={() => onOpenCreateModal(i)}
-                                                    className="w-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] px-1 py-1 rounded hover:bg-indigo-100 font-bold transition-colors shadow-sm"
+                                                    className="w-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 text-[11px] px-1 py-1 rounded hover:bg-indigo-100 dark:hover:bg-indigo-800/50 font-bold transition-colors shadow-sm"
                                                     title={`在 ${day} 建立新王團`}
                                                 >
                                                     + 開團
@@ -805,29 +834,29 @@
                                     const sameAccountCharIds = characters.filter(c => c.accountId === char.accountId).map(c => c.id);
 
                                     return (
-                                        <tr key={char.id} className="hover:bg-gray-50 border-b">
-                                            <td className="p-2 border font-bold">
+                                        <tr key={char.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b dark:border-gray-700">
+                                            <td className="p-2 border dark:border-gray-700 font-bold text-gray-800 dark:text-gray-200">
                                                 {char.name}<br/>
-                                                <span className="text-xs text-gray-400 font-normal">{accounts.find(a => a.id === char.accountId)?.playerName}</span>
+                                                <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">{accounts.find(a => a.id === char.accountId)?.playerName}</span>
                                             </td>
-                                            <td className="p-2 border">
+                                            <td className="p-2 border dark:border-gray-700">
                                                 <span style={getJobStyle(char.jobTypeId)} className="px-2 py-1 rounded text-xs font-bold shadow-sm">{char.job}</span>
-                                                <div className="text-[11px] text-gray-500 font-bold mt-1 pl-1">Lv.{char.level}</div>
+                                                <div className="text-[11px] text-gray-500 dark:text-gray-400 font-bold mt-1 pl-1">Lv.{char.level}</div>
                                             </td>
-                                            <td className="p-2 border">
+                                            <td className="p-2 border dark:border-gray-700">
                                                 <div className="flex flex-wrap gap-1">
                                                     {(avail.bosses || []).map(bId => {
                                                         const b = bosses.find(x => x.id === bId);
                                                         const count = parseInt(avail.bossCounts?.[bId]) || 1;
                                                         return b ? (
-                                                            <span key={bId} style={{ borderColor: b.color, color: b.color }} className="bg-white px-1.5 py-0.5 rounded border text-xs font-bold shadow-sm whitespace-nowrap">
+                                                            <span key={bId} style={{ borderColor: b.color, color: b.color }} className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded border text-xs font-bold shadow-sm whitespace-nowrap">
                                                                 {b.icon} {b.name} {count > 1 && `x${count}`}
                                                             </span>
                                                         ) : null;
                                                     })}
                                                 </div>
                                             </td>
-                                            <td className="p-2 border text-gray-600 text-xs whitespace-normal min-w-[120px]">{avail.note}</td>
+                                            <td className="p-2 border dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs whitespace-normal min-w-[120px]">{avail.note}</td>
                                             {avail.days.map((isAvail, dayIndex) => {
                                                 const charGroupsOnDay = groups.filter(g => g.dayIndex === dayIndex && (g.members.includes(char.id) || g.reserves.includes(char.id)));
                                                 
@@ -856,7 +885,7 @@
                                                 });
 
                                                 return (
-                                                    <td key={dayIndex} className="p-2 border text-center align-top relative min-w-[90px]">
+                                                    <td key={dayIndex} className="p-2 border dark:border-gray-700 text-center align-top relative min-w-[90px]">
                                                         {isAvail ? (
                                                             <div className="flex flex-col items-center gap-1">
                                                                 {/* 顯示該日已被指派的隊伍標籤 */}
@@ -878,7 +907,7 @@
                                                                     const warnTitle = showWarn ? `⚠️ 與 ${conflictGroups.map(ag => ag.name).join(', ')} 衝堂` : g.name;
 
                                                                     return (
-                                                                        <div key={g.id} style={{ borderColor: tagColor, color: tagColor }} className="bg-white text-[11px] px-1 py-0.5 rounded flex items-center justify-between w-full shadow-sm border font-bold mb-1">
+                                                                        <div key={g.id} style={{ borderColor: tagColor, color: tagColor }} className="bg-white dark:bg-gray-800 text-[11px] px-1 py-0.5 rounded flex items-center justify-between w-full shadow-sm border font-bold mb-1">
                                                                             <span className="truncate flex-1 text-left flex items-center" title={warnTitle}>
                                                                                 {showWarn && <span className="text-orange-500 mr-0.5 text-[10px]">⚠️</span>}
                                                                                 {g.name}
@@ -929,7 +958,7 @@
                                                                 {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
                                                                     availableGroupsOnDay.length > 0 ? (
                                                                         <select
-                                                                            className="w-full text-[11px] p-1 border border-blue-300 rounded mt-1 bg-blue-50 text-blue-700 cursor-pointer font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            className="w-full text-[11px] p-1 border border-blue-300 dark:border-blue-700 rounded mt-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 cursor-pointer font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
                                                                             value=""
                                                                             onChange={(e) => assignCharToGroup(char.id, e.target.value)}
                                                                             title="直接指派到王團"
@@ -940,7 +969,7 @@
                                                                                 const conflictNames = accountGroupsOnDay.map(ag => ag.name);
                                                                                 const warnText = conflictNames.length > 0 ? ` (⚠️已排: ${conflictNames.join(', ')})` : '';
                                                                                 return (
-                                                                                    <option key={g.id} value={g.id}>
+                                                                                    <option key={g.id} value={g.id} className="dark:bg-gray-800 dark:text-gray-200">
                                                                                         {g.name}{warnText}
                                                                                     </option>
                                                                                 )
@@ -948,7 +977,7 @@
                                                                         </select>
                                                                     ) : (
                                                                         charGroupsOnDay.length === 0 && !groups.some(g => g.dayIndex === dayIndex) && (
-                                                                            <div className="w-full text-[10px] text-gray-400 text-center mt-1 bg-gray-50 border border-gray-200 rounded py-0.5" title="請先至排班頁面新增該日期的王團">
+                                                                            <div className="w-full text-[10px] text-gray-400 text-center mt-1 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded py-0.5" title="請先至排班頁面新增該日期的王團">
                                                                                 本日未開團
                                                                             </div>
                                                                         )
@@ -956,7 +985,7 @@
                                                                 )}
                                                             </div>
                                                         ) : (
-                                                            <span className="text-gray-300">-</span>
+                                                            <span className="text-gray-300 dark:text-gray-600">-</span>
                                                         )}
                                                     </td>
                                                 );
@@ -1017,22 +1046,22 @@
 
                 return (
                     <div className="space-y-8">
-                        <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow border-l-4 border-indigo-500">
+                        <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-indigo-500 transition-colors">
                             <div className="flex items-center space-x-4">
-                                <h2 className="text-2xl font-bold text-gray-800">王團編組排班</h2>
-                                <div className="bg-gray-100 p-1 rounded-lg flex space-x-1 border border-gray-200 shadow-inner">
+                                <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">王團編組排班</h2>
+                                <div className="bg-gray-100 dark:bg-gray-700 p-1 rounded-lg flex space-x-1 border border-gray-200 dark:border-gray-600 shadow-inner">
                                     <button 
                                         onClick={() => setFilterMode('all')} 
-                                        className={`px-3 py-1 text-sm font-bold rounded-md transition-colors ${filterMode === 'all' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        className={`px-3 py-1 text-sm font-bold rounded-md transition-colors ${filterMode === 'all' ? 'bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                                     >顯示全部隊伍</button>
                                     <button 
                                         onClick={() => setFilterMode('mine')} 
-                                        className={`px-3 py-1 text-sm font-bold rounded-md transition-colors ${filterMode === 'mine' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        className={`px-3 py-1 text-sm font-bold rounded-md transition-colors ${filterMode === 'mine' ? 'bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                                     >顯示自己隊伍</button>
                                 </div>
                             </div>
                             {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
-                                <button onClick={() => onOpenCreateModal(0)} className="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 shadow">
+                                <button onClick={() => onOpenCreateModal(0)} className="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 shadow transition-colors">
                                     + 新增隊伍
                                 </button>
                             )}
@@ -1051,25 +1080,25 @@
                             if(bossGroups.length === 0) return null;
 
                             return (
-                                <div key={boss.id} className="bg-white p-5 rounded-lg shadow-md border border-gray-200">
-                                    <h3 className="text-xl font-black mb-4 border-b pb-2 flex items-center">
+                                <div key={boss.id} className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 transition-colors">
+                                    <h3 className="text-xl font-black mb-4 border-b dark:border-gray-700 pb-2 flex items-center">
                                         <span className="mr-2 text-2xl drop-shadow-sm">{boss.icon}</span> 
                                         <span style={{ color: boss.color }}>{boss.name}</span>
                                     </h3>
                                     
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                         {bossGroups.map(group => (
-                                            <div key={group.id} className="bg-gray-50 rounded-lg border border-gray-300 overflow-hidden">
-                                                <div className="bg-gray-200 border-b border-gray-300 p-3 flex justify-between items-center">
-                                                    <h4 className="font-bold text-gray-800">{group.name}</h4>
+                                            <div key={group.id} className="bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden">
+                                                <div className="bg-gray-200 dark:bg-gray-700 border-b border-gray-300 dark:border-gray-600 p-3 flex justify-between items-center">
+                                                    <h4 className="font-bold text-gray-800 dark:text-gray-100">{group.name}</h4>
                                                     <div className="flex items-center space-x-2">
-                                                        <div className="text-sm font-bold text-indigo-700 bg-white px-2 py-1 rounded border border-indigo-200">
+                                                        <div className="text-sm font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-gray-800 px-2 py-1 rounded border border-indigo-200 dark:border-indigo-700">
                                                             {days[group.dayIndex].split(' ')[0]} ({days[group.dayIndex].split(' ')[1]}) | {group.time}
                                                         </div>
                                                         {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
                                                             <button 
                                                                 onClick={() => handleDeleteGroup(group.id)} 
-                                                                className="text-red-600 hover:text-white hover:bg-red-600 border border-red-300 px-2 rounded text-xs py-1 transition-colors"
+                                                                className="text-red-600 dark:text-red-400 hover:text-white dark:hover:text-white hover:bg-red-600 dark:hover:bg-red-500 border border-red-300 dark:border-red-800 px-2 rounded text-xs py-1 transition-colors"
                                                                 title="刪除隊伍"
                                                             >
                                                                 刪除
@@ -1080,11 +1109,11 @@
                                                 <div className="p-3">
                                                     <table className="w-full text-sm mb-2">
                                                         <thead>
-                                                            <tr className="bg-gray-100">
-                                                                <th className="p-2 text-center w-10 border text-gray-600">#</th>
-                                                                <th className="p-2 text-left border w-2/5">角色名稱</th>
-                                                                <th className="p-2 text-center border w-1/4">職業Lv.</th>
-                                                                <th className="p-2 text-left border">報名備註</th>
+                                                            <tr className="bg-gray-100 dark:bg-gray-700/50">
+                                                                <th className="p-2 text-center w-10 border dark:border-gray-600 text-gray-600 dark:text-gray-400">#</th>
+                                                                <th className="p-2 text-left border dark:border-gray-600 w-2/5 text-gray-800 dark:text-gray-200">角色名稱</th>
+                                                                <th className="p-2 text-center border dark:border-gray-600 w-1/4 text-gray-800 dark:text-gray-200">職業Lv.</th>
+                                                                <th className="p-2 text-left border dark:border-gray-600 text-gray-800 dark:text-gray-200">報名備註</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -1118,17 +1147,17 @@
 
                                                                 // 高亮判斷
                                                                 const isMyChar = myCharIds.includes(memberId);
-                                                                const highlightClasses = isMyChar ? 'bg-yellow-100 text-yellow-900 border-yellow-400 ring-2 ring-yellow-400' : 'bg-blue-50 text-blue-800 border-blue-300';
-                                                                const highlightClassesReadOnly = isMyChar ? 'bg-yellow-100 text-yellow-900 border-yellow-400 ring-1 ring-yellow-400' : 'bg-gray-50 text-gray-800 border-transparent';
+                                                                const highlightClasses = isMyChar ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-200 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-400' : 'bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 border-blue-300 dark:border-blue-700';
+                                                                const highlightClassesReadOnly = isMyChar ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-200 border-yellow-400 dark:border-yellow-600 ring-1 ring-yellow-400' : 'bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-transparent';
 
                                                                 return (
-                                                                    <tr key={idx} className="border-b bg-white hover:bg-gray-50 transition-colors">
-                                                                        <td className="p-2 border text-center font-bold text-gray-400">{idx + 1}</td>
-                                                                        <td className="p-1 border">
+                                                                    <tr key={idx} className="border-b dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                                        <td className="p-2 border dark:border-gray-600 text-center font-bold text-gray-400 dark:text-gray-500">{idx + 1}</td>
+                                                                        <td className="p-1 border dark:border-gray-600">
                                                                             {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') ? (
                                                                                 <div className="relative focus-within:ring-2 focus-within:ring-blue-400 rounded">
                                                                                     {/* 表面顯示的 UI (只顯示名稱與動態防呆警告) */}
-                                                                                    <div className={`w-full p-1.5 border rounded font-bold text-sm flex justify-between items-center ${memberId ? highlightClasses : 'bg-gray-50 text-gray-500 border-gray-200'} transition-all`}>
+                                                                                    <div className={`w-full p-1.5 border rounded font-bold text-sm flex justify-between items-center ${memberId ? highlightClasses : 'bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600'} transition-all`}>
                                                                                         <span className="truncate">
                                                                                             {memberId ? (
                                                                                                 <>
@@ -1190,7 +1219,7 @@
                                                                                                 
                                                                                                 const cWarn = tags.length > 0 ? ` (⚠️ ${tags.join(', ')})` : '';
                                                                                                 return (
-                                                                                                    <option key={c.id} value={c.id}>
+                                                                                                    <option key={c.id} value={c.id} className="dark:bg-gray-800 dark:text-gray-200">
                                                                                                         [{c.job}] {c.name} (Lv.{c.level}){cWarn}
                                                                                                     </option>
                                                                                                 );
@@ -1219,17 +1248,17 @@
                                                                                     </select>
                                                                                 </div>
                                                                             ) : (
-                                                                                <div className={`p-1 flex items-center space-x-2 ${isMyChar ? highlightClassesReadOnly : ''}`}>
+                                                                                <div className={`p-1 flex items-center space-x-2 rounded ${isMyChar ? highlightClassesReadOnly : ''}`}>
                                                                                     {char ? (
-                                                                                        <span className="font-bold text-gray-800">{char.name} {warningText && <span className="text-orange-500 text-xs ml-1">{warningText}</span>}</span>
-                                                                                    ) : <span className="text-gray-400">-</span>}
+                                                                                        <span className="font-bold text-gray-800 dark:text-gray-200">{char.name} {warningText && <span className="text-orange-500 text-xs ml-1">{warningText}</span>}</span>
+                                                                                    ) : <span className="text-gray-400 dark:text-gray-500">-</span>}
                                                                                 </div>
                                                                             )}
                                                                         </td>
-                                                                        <td className="p-1 border text-center">
+                                                                        <td className="p-1 border dark:border-gray-600 text-center">
                                                                             {char ? (
                                                                                 <span style={{
-                                                                                    backgroundColor: '#ffffff',
+                                                                                    backgroundColor: darkMode ? getJobStyle(char.jobTypeId).backgroundColor : '#ffffff',
                                                                                     color: getJobStyle(char.jobTypeId).color,
                                                                                     borderColor: getJobStyle(char.jobTypeId).color,
                                                                                     borderWidth: '1px',
@@ -1238,10 +1267,10 @@
                                                                                     {char.job} {char.level}
                                                                                 </span>
                                                                             ) : (
-                                                                                <span className="text-gray-300">-</span>
+                                                                                <span className="text-gray-300 dark:text-gray-600">-</span>
                                                                             )}
                                                                         </td>
-                                                                        <td className="p-2 border text-xs text-gray-600 truncate max-w-[120px]">{avail ? avail.note : ''}</td>
+                                                                        <td className="p-2 border dark:border-gray-600 text-xs text-gray-600 dark:text-gray-400 truncate max-w-[120px]">{avail ? avail.note : ''}</td>
                                                                     </tr>
                                                                 )
                                                             })}
@@ -1298,49 +1327,49 @@
                 return (
                     <div className="space-y-6">
                         {/* 系統設定 (王團管理) */}
-                        <div className="bg-white p-6 rounded-lg shadow border-t-4 border-red-500">
-                            <h2 className="text-xl font-bold text-gray-800 mb-4">系統設定 - 王團種類管理</h2>
-                            <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 p-4 rounded border">
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-t-4 border-red-500 transition-colors">
+                            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">系統設定 - 王團種類管理</h2>
+                            <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 dark:bg-gray-700/50 p-4 rounded border dark:border-gray-700">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">圖案 (Emoji)</label>
-                                    <input type="text" className="border p-2 rounded w-20 text-center text-xl" value={newBossIcon} onChange={(e) => setNewBossIcon(e.target.value)} />
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">圖案 (Emoji)</label>
+                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-20 text-center text-xl" value={newBossIcon} onChange={(e) => setNewBossIcon(e.target.value)} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">王團名稱</label>
-                                    <input type="text" className="border p-2 rounded w-48" placeholder="例: 混沌黑龍" value={newBossName} onChange={(e) => setNewBossName(e.target.value)} />
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">王團名稱</label>
+                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-48" placeholder="例: 混沌黑龍" value={newBossName} onChange={(e) => setNewBossName(e.target.value)} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">名稱顏色</label>
-                                    <input type="color" className="border p-1 rounded w-16 h-[42px] cursor-pointer" value={newBossColor} onChange={(e) => setNewBossColor(e.target.value)} />
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">名稱顏色</label>
+                                    <input type="color" className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-16 h-[42px] cursor-pointer" value={newBossColor} onChange={(e) => setNewBossColor(e.target.value)} />
                                 </div>
-                                <button onClick={handleAddBoss} className="bg-red-600 text-white px-5 py-2 rounded font-bold hover:bg-red-700 h-[42px] shadow">新增王團</button>
+                                <button onClick={handleAddBoss} className="bg-red-600 text-white px-5 py-2 rounded font-bold hover:bg-red-700 h-[42px] shadow transition-colors">新增王團</button>
                             </div>
                             <div className="flex flex-wrap gap-3 mt-6">
                                 {bosses.map((boss, idx) => (
-                                    <div key={boss.id} style={{ borderColor: boss.color, backgroundColor: boss.color + '10' }} className="border-2 px-3 py-2 rounded flex items-center space-x-2 shadow-sm">
+                                    <div key={boss.id} style={{ borderColor: boss.color, backgroundColor: darkMode ? '#374151' : boss.color + '10' }} className="border-2 px-3 py-2 rounded flex items-center space-x-2 shadow-sm">
                                         <span className="text-xl drop-shadow-sm">{boss.icon}</span>
                                         <span className="font-bold" style={{ color: boss.color }}>{boss.name}</span>
                                         
                                         {/* 新增：調整王團順序的按鈕 */}
-                                        <div className="flex flex-col ml-2 border-l pl-2 border-gray-300/50">
+                                        <div className="flex flex-col ml-2 border-l pl-2 border-gray-300/50 dark:border-gray-600">
                                             <div className="flex space-x-1">
                                                 <button onClick={() => {
                                                     if (idx === 0) return;
                                                     const newB = [...bosses];
                                                     [newB[idx - 1], newB[idx]] = [newB[idx], newB[idx - 1]];
                                                     setBosses(newB);
-                                                }} className="text-gray-400 hover:text-blue-600 font-black text-xs" title="往上移">▲</button>
+                                                }} className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 font-black text-xs" title="往上移">▲</button>
                                                 <button onClick={() => {
                                                     if (idx === bosses.length - 1) return;
                                                     const newB = [...bosses];
                                                     [newB[idx + 1], newB[idx]] = [newB[idx], newB[idx + 1]];
                                                     setBosses(newB);
-                                                }} className="text-gray-400 hover:text-blue-600 font-black text-xs" title="往下移">▼</button>
+                                                }} className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 font-black text-xs" title="往下移">▼</button>
                                             </div>
                                         </div>
 
                                         <button 
-                                            className="text-red-500 hover:text-red-700 font-black ml-1 opacity-50 hover:opacity-100"
+                                            className="text-red-500 hover:text-red-700 font-black ml-1 opacity-50 hover:opacity-100 transition-opacity"
                                             onClick={() => setBosses(bosses.filter(b => b.id !== boss.id))}
                                             title="刪除"
                                         >✕</button>
@@ -1350,35 +1379,35 @@
                         </div>
 
                         {/* 系統設定 (職業分類管理) */}
-                        <div className="bg-white p-6 rounded-lg shadow border-t-4 border-green-500">
-                            <h2 className="text-xl font-bold text-gray-800 mb-4">系統設定 - 職業分類標籤管理</h2>
-                            <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 p-4 rounded border">
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-t-4 border-green-500 transition-colors">
+                            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">系統設定 - 職業分類標籤管理</h2>
+                            <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 dark:bg-gray-700/50 p-4 rounded border dark:border-gray-700">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">自訂職業名稱</label>
-                                    <input type="text" className="border p-2 rounded w-40" placeholder="例: 神之子" value={newJobCatName} onChange={(e) => setNewJobCatName(e.target.value)} />
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">自訂職業名稱</label>
+                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-40" placeholder="例: 神之子" value={newJobCatName} onChange={(e) => setNewJobCatName(e.target.value)} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">背景顏色</label>
-                                    <input type="color" className="border p-1 rounded w-16 h-[42px] cursor-pointer" value={newJobCatBg} onChange={(e) => setNewJobCatBg(e.target.value)} />
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">背景顏色</label>
+                                    <input type="color" className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-16 h-[42px] cursor-pointer" value={newJobCatBg} onChange={(e) => setNewJobCatBg(e.target.value)} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">文字外框顏色</label>
-                                    <input type="color" className="border p-1 rounded w-16 h-[42px] cursor-pointer" value={newJobCatText} onChange={(e) => setNewJobCatText(e.target.value)} />
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">文字外框顏色</label>
+                                    <input type="color" className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-16 h-[42px] cursor-pointer" value={newJobCatText} onChange={(e) => setNewJobCatText(e.target.value)} />
                                 </div>
-                                <button onClick={handleAddJobCat} className="bg-green-600 text-white px-5 py-2 rounded font-bold hover:bg-green-700 h-[42px] shadow">新增職業分類</button>
+                                <button onClick={handleAddJobCat} className="bg-green-600 text-white px-5 py-2 rounded font-bold hover:bg-green-700 h-[42px] shadow transition-colors">新增職業分類</button>
                             </div>
                             
                             {/* 按組別呈現職業標籤 */}
                             <div className="space-y-4 mt-6">
                                 {Object.entries(groupedJobs).map(([groupName, jobs]) => (
-                                    <div key={groupName} className="border border-gray-200 p-4 rounded bg-white shadow-sm">
-                                        <h3 className="text-sm font-bold text-gray-500 mb-3 border-b pb-1">{groupName}</h3>
+                                    <div key={groupName} className="border border-gray-200 dark:border-gray-700 p-4 rounded bg-white dark:bg-gray-800 shadow-sm transition-colors">
+                                        <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-3 border-b dark:border-gray-700 pb-1">{groupName}</h3>
                                         <div className="flex flex-wrap gap-2">
                                             {jobs.map(jc => (
-                                                <div key={jc.id} className="border px-2 py-1 rounded flex items-center space-x-1 shadow-sm text-sm transition-all hover:scale-105" style={{ backgroundColor: jc.bgColor, borderColor: jc.borderColor }}>
+                                                <div key={jc.id} className="border px-2 py-1 rounded flex items-center space-x-1 shadow-sm text-sm transition-all hover:scale-105" style={{ backgroundColor: darkMode ? '#374151' : jc.bgColor, borderColor: jc.borderColor }}>
                                                     <span className="font-bold" style={{ color: jc.textColor }}>{jc.name}</span>
                                                     <button 
-                                                        className="text-gray-500 hover:text-red-600 font-black ml-1 opacity-60 hover:opacity-100"
+                                                        className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 font-black ml-1 opacity-60 hover:opacity-100 transition-opacity"
                                                         onClick={() => setJobCategories(jobCategories.filter(j => j.id !== jc.id))}
                                                         title="刪除"
                                                     >✕</button>
@@ -1391,57 +1420,57 @@
                         </div>
 
                         {/* 新增：系統設定 (排班日期與換週設定) */}
-                        <div className="bg-white p-6 rounded-lg shadow border-t-4 border-yellow-500">
-                            <h2 className="text-xl font-bold text-gray-800 mb-4">系統設定 - 排班日期與換週</h2>
-                            <div className="flex flex-wrap gap-4 items-end bg-gray-50 p-4 rounded border">
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-t-4 border-yellow-500 transition-colors">
+                            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">系統設定 - 排班日期與換週</h2>
+                            <div className="flex flex-wrap gap-4 items-end bg-gray-50 dark:bg-gray-700/50 p-4 rounded border dark:border-gray-700">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">本週起始日期 (通常設為週四)</label>
-                                    <input type="date" className="border p-2 rounded h-[42px] cursor-pointer" value={weekStartDate} onChange={(e) => setWeekStartDate(e.target.value)} />
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">本週起始日期 (通常設為週四)</label>
+                                    <input type="date" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded h-[42px] cursor-pointer" value={weekStartDate} onChange={(e) => setWeekStartDate(e.target.value)} />
                                 </div>
                                 <div className="ml-auto">
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">重置動作</label>
-                                    <button onClick={() => setIsConfirmResetOpen(true)} className="bg-yellow-600 text-white px-5 py-2 rounded font-bold hover:bg-yellow-700 shadow h-[42px] flex items-center transition-all">
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">重置動作</label>
+                                    <button onClick={() => setIsConfirmResetOpen(true)} className="bg-yellow-600 text-white px-5 py-2 rounded font-bold hover:bg-yellow-700 shadow h-[42px] flex items-center transition-colors">
                                         <span className="mr-2">⚠️</span> 清空報名表單與王團名單
                                     </button>
                                 </div>
                             </div>
-                            <p className="text-sm text-gray-500 mt-2">💡 提示：更改起始日期後，所有頁面的日期將會自動順延 7 天。準備開新團前，請點擊「清空報名表單」將所有人舊的打勾紀錄歸零。</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">💡 提示：更改起始日期後，所有頁面的日期將會自動順延 7 天。準備開新團前，請點擊「清空報名表單」將所有人舊的打勾紀錄歸零。</p>
                         </div>
 
                         {/* 帳號權限管理 */}
-                        <div className="bg-white p-6 rounded-lg shadow border-t-4 border-blue-500">
-                            <h2 className="text-xl font-bold text-gray-800 mb-4">公會帳號權限與密碼管理</h2>
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-t-4 border-blue-500 transition-colors">
+                            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">公會帳號權限與密碼管理</h2>
                             
-                            <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 p-4 rounded border">
+                            <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 dark:bg-gray-700/50 p-4 rounded border dark:border-gray-700">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">新玩家名稱</label>
-                                    <input type="text" className="border p-2 rounded w-48" placeholder="例: 瓜董(玩家)" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">新玩家名稱</label>
+                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-48" placeholder="例: 瓜董(玩家)" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
                                 </div>
-                                <button onClick={handleAddAccount} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 h-[42px] shadow">新增玩家帳號</button>
+                                <button onClick={handleAddAccount} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 h-[42px] shadow transition-colors">新增玩家帳號</button>
                             </div>
 
                             <table className="w-full border-collapse text-sm text-left mt-4">
                                 <thead>
-                                    <tr className="bg-gray-100 border-b">
-                                        <th className="p-3 border">玩家(帳號)名稱</th>
-                                        <th className="p-3 border">登入密碼</th>
-                                        <th className="p-3 border">系統權限</th>
-                                        <th className="p-3 border text-center">操作</th>
+                                    <tr className="bg-gray-100 dark:bg-gray-700/50 border-b dark:border-gray-700 text-gray-800 dark:text-gray-200">
+                                        <th className="p-3 border dark:border-gray-700">玩家(帳號)名稱</th>
+                                        <th className="p-3 border dark:border-gray-700">登入密碼</th>
+                                        <th className="p-3 border dark:border-gray-700">系統權限</th>
+                                        <th className="p-3 border dark:border-gray-700 text-center">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {accounts.map(acc => (
-                                        <tr key={acc.id} className="hover:bg-gray-50 border-b">
-                                            <td className="p-3 border font-medium">{acc.playerName}</td>
-                                            <td className="p-3 border">
-                                                <input type="text" className="border p-1 rounded w-32 text-center font-medium text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none" value={acc.passcode || ''} onChange={(e) => {
+                                        <tr key={acc.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b dark:border-gray-700 transition-colors text-gray-800 dark:text-gray-200">
+                                            <td className="p-3 border dark:border-gray-700 font-medium">{acc.playerName}</td>
+                                            <td className="p-3 border dark:border-gray-700">
+                                                <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-32 text-center font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-colors" value={acc.passcode || ''} onChange={(e) => {
                                                     const newAccs = accounts.map(a => a.id === acc.id ? {...a, passcode: e.target.value} : a);
                                                     setAccounts(newAccs);
                                                 }} />
                                             </td>
-                                            <td className="p-3 border">
+                                            <td className="p-3 border dark:border-gray-700">
                                                 <select 
-                                                    className="border p-1 rounded bg-white"
+                                                    className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded transition-colors"
                                                     value={acc.role}
                                                     onChange={(e) => {
                                                         const newAccs = accounts.map(a => a.id === acc.id ? {...a, role: e.target.value} : a);
@@ -1453,9 +1482,9 @@
                                                     <option value="admin">管理員</option>
                                                 </select>
                                             </td>
-                                            <td className="p-3 border text-center">
+                                            <td className="p-3 border dark:border-gray-700 text-center">
                                                  <button 
-                                                    className="text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                                                    className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-bold px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
                                                     onClick={() => setAccountToDelete(acc.id)}
                                                  >刪除</button>
                                             </td>
@@ -1470,7 +1499,7 @@
 
             // 導覽列
             const navItems = [
-                { id: 'my-schedule', label: '我的報名表' } // 讓所有人(包含管理員)都可以報名
+                { id: 'my-schedule', label: '我的報名表' } 
             ];
             
             if (currentAccount.role === 'member') {
@@ -1485,36 +1514,45 @@
             }
 
             return (
-                <div className="min-h-screen flex flex-col">
-                    <header className="bg-white shadow-sm border-b">
+                <div className="min-h-screen flex flex-col transition-colors">
+                    <header className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700 transition-colors">
                         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-                            <h1 className="text-xl font-black text-gray-800 flex items-center">
+                            <h1 className="text-xl font-black text-gray-800 dark:text-gray-100 flex items-center">
                                 <span className="text-2xl mr-2">⚔️</span> 公會綜合王團排班系統
                             </h1>
                             <div className="flex items-center space-x-3">
+                                {/* 切換深色模式按鈕 */}
+                                <button 
+                                    onClick={() => setDarkMode(!darkMode)}
+                                    className="mr-2 p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-yellow-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors focus:outline-none"
+                                    title="切換深色/淺色模式"
+                                >
+                                    {darkMode ? '🌙' : '☀️'}
+                                </button>
+                                
                                 <div className="text-right">
-                                    <div className="font-bold text-gray-800">{currentAccount.playerName}</div>
-                                    <div className="text-xs text-gray-500">
+                                    <div className="font-bold text-gray-800 dark:text-gray-100">{currentAccount.playerName}</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">
                                         {currentAccount.role === 'admin' ? '管理員' : currentAccount.role === 'subadmin' ? '副管理員' : '一般會員'}
-                                        <button onClick={handleLogout} className="ml-3 text-red-500 hover:text-red-700 underline font-bold cursor-pointer">登出</button>
+                                        <button onClick={handleLogout} className="ml-3 text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline font-bold cursor-pointer">登出</button>
                                     </div>
                                 </div>
-                                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-600 border-2 border-blue-300">
+                                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center font-bold text-blue-600 dark:text-blue-400 border-2 border-blue-300 dark:border-blue-700">
                                     {currentAccount.playerName.charAt(0)}
                                 </div>
                             </div>
                         </div>
                     </header>
 
-                    <div className="bg-white shadow-sm mb-6">
-                        <div className="max-w-7xl mx-auto px-4 flex space-x-6">
+                    <div className="bg-white dark:bg-gray-800 shadow-sm mb-6 transition-colors">
+                        <div className="max-w-7xl mx-auto px-4 flex space-x-6 overflow-x-auto">
                             {navItems.map(item => (
                                 <button
                                     key={item.id}
-                                    className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+                                    className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
                                         activeTab === item.id 
-                                        ? 'border-blue-500 text-blue-600' 
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400' 
+                                        : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
                                     }`}
                                     onClick={() => setActiveTab(item.id)}
                                 >
@@ -1534,21 +1572,21 @@
                     {/* 新增/編輯角色 Modal */}
                     {isAddCharModalOpen && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md border-t-8 border-blue-500">
-                                <h2 className="text-2xl font-black mb-4 flex items-center">
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-md border-t-8 border-blue-500 transition-colors">
+                                <h2 className="text-2xl font-black mb-4 flex items-center text-gray-800 dark:text-gray-100">
                                     <span className="text-blue-500 mr-2">{editCharId ? '✏️' : '➕'}</span> 
                                     {editCharId ? '編輯遊戲角色' : '新增遊戲角色'}
                                 </h2>
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">角色名稱 (與帳號綁定)</label>
-                                        <input type="text" className="w-full p-2 border border-gray-300 rounded bg-gray-100 font-bold text-gray-500 cursor-not-allowed" value={currentAccount.playerName} disabled title="角色名稱與帳號名稱連動" />
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">角色名稱 (與帳號綁定)</label>
+                                        <input type="text" className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-700/50 font-bold text-gray-500 dark:text-gray-400 cursor-not-allowed" value={currentAccount.playerName} disabled title="角色名稱與帳號名稱連動" />
                                     </div>
                                     <div className="flex gap-4">
                                         <div className="flex-1">
-                                            <label className="block text-sm font-bold text-gray-700 mb-1">職業 (三轉/四轉)</label>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">職業 (三轉/四轉)</label>
                                             <select 
-                                                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 font-medium" 
+                                                className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500 font-medium" 
                                                 value={newChar.jobTypeId} 
                                                 onChange={e => {
                                                     const selected = jobCategories.find(jc => jc.id === e.target.value);
@@ -1564,13 +1602,13 @@
                                             </select>
                                         </div>
                                         <div className="w-24">
-                                            <label className="block text-sm font-bold text-gray-700 mb-1">等級</label>
-                                            <input type="number" className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" value={newChar.level} onChange={e => setNewChar({...newChar, level: e.target.value})} />
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">等級</label>
+                                            <input type="number" className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500" value={newChar.level} onChange={e => setNewChar({...newChar, level: e.target.value})} />
                                         </div>
                                     </div>
                                 </div>
                                 <div className="mt-6 flex justify-end space-x-3">
-                                    <button onClick={() => setIsAddCharModalOpen(false)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={() => setIsAddCharModalOpen(false)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                     <button onClick={handleAddCharacter} className="px-5 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 shadow transition-colors">
                                         {editCharId ? '儲存修改' : '確認新增'}
                                     </button>
@@ -1582,13 +1620,13 @@
                     {/* 新增王團 Modal */}
                     {isCreateModalOpen && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md border-t-8 border-indigo-500">
-                                <h2 className="text-2xl font-black mb-4 flex items-center"><span className="text-indigo-500 mr-2">✚</span> 新增王團隊伍</h2>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-md border-t-8 border-indigo-500 transition-colors">
+                                <h2 className="text-2xl font-black mb-4 flex items-center text-gray-800 dark:text-gray-100"><span className="text-indigo-500 mr-2">✚</span> 新增王團隊伍</h2>
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">選擇王團</label>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">選擇王團</label>
                                         <select 
-                                            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500" 
+                                            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-indigo-500" 
                                             value={newGroup.bossId} 
                                             onChange={e => {
                                                 const newBossId = e.target.value;
@@ -1603,22 +1641,22 @@
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">隊伍名稱 (可自訂修改)</label>
-                                        <input type="text" className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500" placeholder="例: 1.殘暴炎魔" value={newGroup.name} onChange={e => setNewGroup({...newGroup, name: e.target.value})} />
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">隊伍名稱 (可自訂修改)</label>
+                                        <input type="text" className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-indigo-500" placeholder="例: 1.殘暴炎魔" value={newGroup.name} onChange={e => setNewGroup({...newGroup, name: e.target.value})} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">出團日期</label>
-                                        <select className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 font-medium text-indigo-700" value={newGroup.dayIndex} onChange={e => setNewGroup({...newGroup, dayIndex: e.target.value})}>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">出團日期</label>
+                                        <select className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded focus:ring-2 focus:ring-indigo-500 font-medium text-indigo-700 dark:text-indigo-400" value={newGroup.dayIndex} onChange={e => setNewGroup({...newGroup, dayIndex: e.target.value})}>
                                             {days.map((d, i) => <option key={i} value={i}>{d}</option>)}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">詳細時間說明 (可自訂修改)</label>
-                                        <input type="text" className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500" placeholder="例: 21:30~22:00集合" value={newGroup.time} onChange={e => setNewGroup({...newGroup, time: e.target.value})} />
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">詳細時間說明 (可自訂修改)</label>
+                                        <input type="text" className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-indigo-500" placeholder="例: 21:30~22:00集合" value={newGroup.time} onChange={e => setNewGroup({...newGroup, time: e.target.value})} />
                                     </div>
                                 </div>
                                 <div className="mt-6 flex justify-end space-x-3">
-                                    <button onClick={() => setIsCreateModalOpen(false)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={() => setIsCreateModalOpen(false)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                     <button onClick={handleAddGroup} className="px-5 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700 shadow transition-colors">確認建立</button>
                                 </div>
                             </div>
@@ -1628,9 +1666,9 @@
                     {/* 自訂 Alert Modal (系統提示) */}
                     {alertMessage && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
-                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-yellow-500">
-                                <h2 className="text-xl font-black mb-4 flex items-center text-yellow-600">⚠️ 系統提示</h2>
-                                <p className="mb-6 text-gray-700 whitespace-pre-line">{alertMessage}</p>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-yellow-500 transition-colors">
+                                <h2 className="text-xl font-black mb-4 flex items-center text-yellow-600 dark:text-yellow-400">⚠️ 系統提示</h2>
+                                <p className="mb-6 text-gray-700 dark:text-gray-300 whitespace-pre-line">{alertMessage}</p>
                                 <div className="flex justify-end">
                                     <button onClick={() => setAlertMessage('')} className="px-5 py-2 bg-yellow-500 text-white rounded font-bold hover:bg-yellow-600 transition-colors">確認</button>
                                 </div>
@@ -1641,11 +1679,11 @@
                     {/* 自訂 Confirm Modal (隊伍刪除確認) */}
                     {groupToDelete && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
-                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500">
-                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600">🚨 刪除確認</h2>
-                                <p className="mb-6 text-gray-700">確定要刪除這個隊伍嗎？<br/><span className="text-red-500 font-bold">此操作無法復原。</span></p>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500 transition-colors">
+                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600 dark:text-red-400">🚨 刪除確認</h2>
+                                <p className="mb-6 text-gray-700 dark:text-gray-300">確定要刪除這個隊伍嗎？<br/><span className="text-red-500 dark:text-red-400 font-bold">此操作無法復原。</span></p>
                                 <div className="flex justify-end space-x-3">
-                                    <button onClick={() => setGroupToDelete(null)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={() => setGroupToDelete(null)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                     <button onClick={() => {
                                         setGroups(groups.filter(g => g.id !== groupToDelete));
                                         setGroupToDelete(null);
@@ -1658,11 +1696,11 @@
                     {/* 自訂 Confirm Modal (角色刪除確認) */}
                     {charToDelete && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
-                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500">
-                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600">🚨 刪除角色確認</h2>
-                                <p className="mb-6 text-gray-700">確定要刪除該角色嗎？<br/><span className="text-red-500 font-bold">這將會同時將其從已排入的王團中移除。</span></p>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500 transition-colors">
+                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600 dark:text-red-400">🚨 刪除角色確認</h2>
+                                <p className="mb-6 text-gray-700 dark:text-gray-300">確定要刪除該角色嗎？<br/><span className="text-red-500 dark:text-red-400 font-bold">這將會同時將其從已排入的王團中移除。</span></p>
                                 <div className="flex justify-end space-x-3">
-                                    <button onClick={() => setCharToDelete(null)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={() => setCharToDelete(null)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                     <button onClick={confirmDeleteChar} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
                                 </div>
                             </div>
@@ -1672,11 +1710,11 @@
                     {/* 自訂 Confirm Modal (帳號刪除確認) */}
                     {accountToDelete && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
-                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500">
-                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600">🚨 刪除帳號確認</h2>
-                                <p className="mb-6 text-gray-700">確定要刪除該玩家帳號嗎？<br/><span className="text-red-500 font-bold">他將無法再登入系統。</span></p>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500 transition-colors">
+                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600 dark:text-red-400">🚨 刪除帳號確認</h2>
+                                <p className="mb-6 text-gray-700 dark:text-gray-300">確定要刪除該玩家帳號嗎？<br/><span className="text-red-500 dark:text-red-400 font-bold">他將無法再登入系統。</span></p>
                                 <div className="flex justify-end space-x-3">
-                                    <button onClick={() => setAccountToDelete(null)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={() => setAccountToDelete(null)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                     <button onClick={() => {
                                         setAccounts(accounts.filter(a => a.id !== accountToDelete));
                                         setAccountToDelete(null);
@@ -1689,11 +1727,11 @@
                     {/* 自訂 Confirm Modal (換週清空確認) */}
                     {isConfirmResetOpen && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] px-4">
-                            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-yellow-500">
-                                <h2 className="text-xl font-black mb-4 flex items-center text-yellow-600">⚠️ 換週清空確認</h2>
-                                <p className="mb-6 text-gray-700">確定要清空所有人的報名資料與王團名單嗎？<br/><span className="text-red-500 font-bold">此操作將重置全部表單，無法復原！</span></p>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-yellow-500 transition-colors">
+                                <h2 className="text-xl font-black mb-4 flex items-center text-yellow-600 dark:text-yellow-400">⚠️ 換週清空確認</h2>
+                                <p className="mb-6 text-gray-700 dark:text-gray-300">確定要清空所有人的報名資料與王團名單嗎？<br/><span className="text-red-500 dark:text-red-400 font-bold">此操作將重置全部表單，無法復原！</span></p>
                                 <div className="flex justify-end space-x-3">
-                                    <button onClick={() => setIsConfirmResetOpen(false)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={() => setIsConfirmResetOpen(false)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                     <button onClick={() => {
                                         const newAvail = {};
                                         characters.forEach(c => {
