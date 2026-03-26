@@ -149,6 +149,9 @@
             const [weekStartDate, _setWeekStartDate] = useState(new Date().toISOString().split('T')[0]); 
             const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
 
+            // 新增：全域狀態，用於記錄「成員報名總表」當前的王團分頁
+            const [matrixBossTab, setMatrixBossTab] = useState('all');
+
             useEffect(() => {
                 if (!user || !db) return;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main');
@@ -633,7 +636,6 @@
             // --- 元件：報名總表 ---
             const AvailabilityMatrix = ({ onOpenCreateModal }) => {
                 const [sortMode, setSortMode] = useState('default'); 
-                const [selectedBossTab, setSelectedBossTab] = useState('all'); // 新增：王團分頁狀態
 
                 const assignCharToGroup = (charId, groupId) => {
                     if (!groupId) return;
@@ -699,12 +701,12 @@
                         // 必須有勾選日期才算有報名
                         if (!avail || !avail.days.some(d => d)) return false;
                         // 如果有選擇特定王團分頁，檢查該角色是否有報名該王團
-                        if (selectedBossTab !== 'all') {
-                            if (!avail.bosses || !avail.bosses.includes(selectedBossTab)) return false;
+                        if (matrixBossTab !== 'all') {
+                            if (!avail.bosses || !avail.bosses.includes(matrixBossTab)) return false;
                         }
                         return true;
                     });
-                }, [sortedCharacters, availability, selectedBossTab]);
+                }, [sortedCharacters, availability, matrixBossTab]);
 
                 return (
                     <div className="bg-white p-6 rounded-lg shadow overflow-x-auto">
@@ -715,21 +717,21 @@
                         {/* 王團過濾分頁標籤 */}
                         <div className="flex space-x-3 mb-4 overflow-x-auto pb-2 border-b border-gray-100">
                             <button 
-                                className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all shadow-sm ${selectedBossTab === 'all' ? 'bg-gray-800 text-white scale-105' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                                onClick={() => setSelectedBossTab('all')}
+                                className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all shadow-sm ${matrixBossTab === 'all' ? 'bg-gray-800 text-white scale-105' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                                onClick={() => setMatrixBossTab('all')}
                             >
                                 📋 報名總表
                             </button>
                             {bosses.map(boss => (
                                 <button 
                                     key={boss.id}
-                                    className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all shadow-sm ${selectedBossTab === boss.id ? 'scale-105' : 'hover:bg-gray-50 opacity-70 hover:opacity-100'}`}
+                                    className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all shadow-sm ${matrixBossTab === boss.id ? 'scale-105' : 'hover:bg-gray-50 opacity-70 hover:opacity-100'}`}
                                     style={{ 
-                                        backgroundColor: selectedBossTab === boss.id ? boss.color : '#ffffff',
-                                        color: selectedBossTab === boss.id ? '#ffffff' : boss.color,
+                                        backgroundColor: matrixBossTab === boss.id ? boss.color : '#ffffff',
+                                        color: matrixBossTab === boss.id ? '#ffffff' : boss.color,
                                         border: `2px solid ${boss.color}`
                                     }}
-                                    onClick={() => setSelectedBossTab(boss.id)}
+                                    onClick={() => setMatrixBossTab(boss.id)}
                                 >
                                     {boss.icon} {boss.name}
                                 </button>
@@ -843,7 +845,7 @@
                                                     if (!(avail.bosses || []).includes(bId)) return false;
                                                     
                                                     // 如果有選擇王團分頁，不顯示其他王團的快速指派
-                                                    if (selectedBossTab !== 'all' && bId !== selectedBossTab) return false;
+                                                    if (matrixBossTab !== 'all' && bId !== matrixBossTab) return false;
                                                     
                                                     const totalCount = parseInt(avail.bossCounts?.[bId]) || 1;
                                                     const assignedCount = groups.filter(grp => grp.bossId === bId && (grp.members.includes(char.id) || grp.reserves.includes(char.id))).length;
@@ -894,7 +896,7 @@
                                                                             const b = bosses.find(x => x.id === bId);
                                                                             if (!b) return null;
                                                                             // 如果正在使用分頁過濾，只顯示該分頁的王團圖示
-                                                                            if (selectedBossTab !== 'all' && b.id !== selectedBossTab) return null;
+                                                                            if (matrixBossTab !== 'all' && b.id !== matrixBossTab) return null;
                                                                             
                                                                             const totalCount = parseInt(avail.bossCounts?.[bId]) || 1;
                                                                             const assignedCount = groups.filter(g => g.bossId === bId && (g.members.includes(char.id) || g.reserves.includes(char.id))).length;
@@ -1070,6 +1072,9 @@
                                                                 const conflictNames = getConflictGroupNames(memberId, group.id, group.dayIndex);
                                                                 
                                                                 let isOverQuota = false;
+                                                                let isDuplicateInGroup = false;
+                                                                
+                                                                // 【防呆】檢查已經選進來的人，有沒有超過次數或是在同一團出現兩次
                                                                 if (memberId && char) {
                                                                     const cAvail = availability[memberId];
                                                                     const isBossChecked = cAvail && cAvail.bosses && cAvail.bosses.includes(group.bossId);
@@ -1077,11 +1082,13 @@
                                                                     const assignedCount = groups.filter(grp => grp.bossId === group.bossId && (grp.members.includes(memberId) || grp.reserves.includes(memberId))).length;
                                                                     
                                                                     if (assignedCount > totalCount) isOverQuota = true;
+                                                                    if (group.members.filter(m => m === memberId).length > 1) isDuplicateInGroup = true;
                                                                 }
                                                                 
                                                                 let warnArr = [];
                                                                 if (conflictNames.length > 0) warnArr.push(`衝堂: ${conflictNames.join(', ')}`);
                                                                 if (isOverQuota) warnArr.push(`超排/未報名`);
+                                                                if (isDuplicateInGroup) warnArr.push(`重複入隊`);
                                                                 
                                                                 const warningText = warnArr.length > 0 ? `(⚠️ ${warnArr.join(', ')})` : '';
 
@@ -1128,7 +1135,7 @@
                                                                                                     const totalCount = parseInt(cAvail.bossCounts?.[group.bossId]) || 1;
                                                                                                     const assignedCount = groups.filter(grp => grp.bossId === group.bossId && (grp.members.includes(c.id) || grp.reserves.includes(c.id))).length;
                                                                                                     let adjustedAssigned = assignedCount;
-                                                                                                    // 如果目前這個格子本來就是選這個人，要把他自己的這個名額加回去計算
+                                                                                                    // 【校正回歸】如果我們正在評估的這個選單格子本來就是選這個人，要把他自己的這個名額吐回去，才能正確計算如果維持不變是否還有資格
                                                                                                     if (memberId === c.id) {
                                                                                                        adjustedAssigned -= 1;
                                                                                                     }
