@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Waku公會突襲報名表</title>
+    <title>公會王團報名排班系統</title>
     
     <!-- 加入南瓜 LOGO 標籤 -->
     <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🎃</text></svg>'>
@@ -239,7 +239,7 @@
             const [newGroup, setNewGroup] = useState({ bossId: '', name: '', dayIndex: 0, time: '' });
 
             const [isAddCharModalOpen, setIsAddCharModalOpen] = useState(false);
-            const [newChar, setNewChar] = useState({ name: '', job: '', jobTypeId: '', level: 0 });
+            const [newChar, setNewChar] = useState({ name: '', job: '', jobTypeId: '', level: 200 });
             
             const [editCharId, setEditCharId] = useState(null);
             
@@ -493,7 +493,7 @@
                             <div className="flex justify-between items-center mb-6">
                                 <h1 className="text-2xl font-black text-gray-800 dark:text-gray-100 flex items-center">
                                     <span onClick={handleSwordClick} className="text-blue-500 mr-2 cursor-pointer select-none" title=" ">⚔️</span> 
-                                    公會排班登入
+                                    Waku突襲登入
                                 </h1>
                                 <button onClick={() => setDarkMode(!darkMode)} className="text-xl p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="切換深色模式">
                                     {darkMode ? '☀️' : '🌙'}
@@ -517,7 +517,7 @@
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">輸入登入密碼</label>
                                     <input 
                                         type="password" 
-                                        placeholder="預設: 一般1234 / 管理admin" 
+                                        placeholder="預設: 一般1234 " 
                                         className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500" 
                                         value={passcode} 
                                         onChange={e => setPasscode(e.target.value)} 
@@ -696,10 +696,10 @@
                 return (
                     <div className="space-y-6">
                         <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-blue-500 transition-colors">
-                            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">我的報名表</h2>
+                            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">我的資訊卡</h2>
                             <button onClick={() => {
                                 setEditCharId(null);
-                                setNewChar({ name: currentAccount.playerName, job: '', jobTypeId: '', level: 0 });
+                                setNewChar({ name: currentAccount.playerName, job: '', jobTypeId: '', level: 200 });
                                 setIsAddCharModalOpen(true);
                             }} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 shadow transition-colors">
                                 + 新增角色
@@ -803,7 +803,7 @@
 
                         <div className="text-right">
                             <button onClick={saveToCloud} className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-lg">
-                                儲存報名資料
+                                儲存資料
                             </button>
                         </div>
                     </div>
@@ -1201,7 +1201,7 @@
                     <div className="space-y-8">
                         <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-indigo-500 transition-colors">
                             <div className="flex items-center space-x-4">
-                                <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">王團編組排班</h2>
+                                <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">突襲成團表</h2>
                                 <div className="bg-gray-100 dark:bg-gray-700 p-1 rounded-lg flex space-x-1 border border-gray-200 dark:border-gray-600 shadow-inner">
                                     <button 
                                         onClick={() => setRaidFilterMode('all')} 
@@ -1510,14 +1510,14 @@
                     <div className="space-y-6">
                         {/* 系統設定 (王團管理) */}
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-t-4 border-red-500 transition-colors">
-                            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">系統設定 - 王團種類管理</h2>
+                            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">系統設定 - Boss突襲管理</h2>
                             <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 dark:bg-gray-700/50 p-4 rounded border dark:border-gray-700">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">圖案 (Emoji)</label>
                                     <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-20 text-center text-xl" value={newBossIcon} onChange={(e) => setNewBossIcon(e.target.value)} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">王團名稱</label>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Boss名稱</label>
                                     <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-48" placeholder="例: 混沌黑龍" value={newBossName} onChange={(e) => setNewBossName(e.target.value)} />
                                 </div>
                                 <div>
@@ -1625,9 +1625,9 @@
                             <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 dark:bg-gray-700/50 p-4 rounded border dark:border-gray-700">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">新玩家名稱</label>
-                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-48" placeholder="例: 瓜董(玩家)" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
+                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-48" placeholder="例: (玩家)" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
                                 </div>
-                                <button onClick={handleAddAccountDraft} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white px-5 py-2 rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-500 h-[42px] shadow transition-colors border dark:border-gray-500">➕ 新增玩家 (未儲存)</button>
+                                <button onClick={handleAddAccountDraft} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white px-5 py-2 rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-500 h-[42px] shadow transition-colors border dark:border-gray-500">➕ 新增玩家</button>
                             </div>
 
                             <table className="w-full border-collapse text-sm text-left mt-4">
@@ -1693,17 +1693,17 @@
 
             // 導覽列
             const navItems = [
-                { id: 'my-schedule', label: '我的報名表' } 
+                { id: 'my-schedule', label: 'BOSS報名' } 
             ];
             
             if (currentAccount.role === 'member') {
-                navItems.push({ id: 'planner', label: '查看王團名單' });
+                navItems.push({ id: 'planner', label: '查看成團名單' });
             } else if (currentAccount.role === 'subadmin') {
-                navItems.push({ id: 'matrix', label: '成員報名總表' });
-                navItems.push({ id: 'planner', label: '王團編組排班' });
+                navItems.push({ id: 'matrix', label: '成員報名表' });
+                navItems.push({ id: 'planner', label: '突襲成團' });
             } else if (currentAccount.role === 'admin') {
-                navItems.push({ id: 'matrix', label: '成員報名總表' });
-                navItems.push({ id: 'planner', label: '王團編組排班' });
+                navItems.push({ id: 'matrix', label: '成員報名表' });
+                navItems.push({ id: 'planner', label: '突襲成團' });
                 navItems.push({ id: 'system', label: '系統與權限管理' });
             }
 
@@ -1712,7 +1712,7 @@
                     <header className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700 transition-colors">
                         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
                             <h1 className="text-xl font-black text-gray-800 dark:text-gray-100 flex items-center">
-                                <span className="text-2xl mr-2">⚔️</span> 公會綜合王團排班系統
+                                <span className="text-2xl mr-2">⚔️</span> Waku突襲排團系統
                             </h1>
                             <div className="flex items-center space-x-3">
                                 {/* 切換深色模式按鈕 */}
