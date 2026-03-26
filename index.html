@@ -238,7 +238,10 @@
             const [newChar, setNewChar] = useState({ name: '', job: '', jobTypeId: '', level: 200 });
             
             const [editCharId, setEditCharId] = useState(null);
+            
+            // 修復：加回原本遺漏的 accountToDelete 宣告，避免引發白畫面錯誤
             const [charToDelete, setCharToDelete] = useState(null);
+            const [accountToDelete, setAccountToDelete] = useState(null);
 
             const [alertMessage, setAlertMessage] = useState('');
             const [groupToDelete, setGroupToDelete] = useState(null);
@@ -1809,12 +1812,12 @@
                                                 const newBossId = e.target.value;
                                                 const newBoss = bosses.find(b => b.id === newBossId);
                                                 // 切換王團時，動態更新預設隊伍名稱
-                                                const bossGroupsCount = groups.filter(g => g.bossId === newBossId).length;
+                                                const bossGroupsCount = (groups || []).filter(g => g.bossId === newBossId).length;
                                                 const defaultGroupName = newBoss ? `${bossGroupsCount + 1}.${newBoss.name}` : '';
                                                 setNewGroup({...newGroup, bossId: newBossId, name: defaultGroupName});
                                             }}
                                         >
-                                            {bosses.map(b => <option key={b.id} value={b.id}>{b.icon} {b.name}</option>)}
+                                            {(bosses || []).map(b => <option key={b.id} value={b.id}>{b.icon} {b.name}</option>)}
                                         </select>
                                     </div>
                                     <div>
