@@ -347,20 +347,54 @@
                 const [loginName, setLoginName] = useState('');
                 const [passcode, setPasscode] = useState('');
                 const [error, setError] = useState('');
+                const [rememberMe, setRememberMe] = useState(() => localStorage.getItem('waku-raid-remember') === 'true');
                 
                 // 註冊相關狀態
                 const [isRegisterOpen, setIsRegisterOpen] = useState(false);
                 const [regName, setRegName] = useState('');
                 const [regPasscode, setRegPasscode] = useState('');
 
-                const forceResetAccounts = () => {
-                    if(window.confirm('這將會清除雲端舊帳號與舊名單，並載入最新乾淨的初始狀態，確定要執行嗎？')) {
-                        setAccounts(initialAccounts);
-                        setCharacters(initialCharacters);
-                        setAvailability(initialAvailability);
-                        setGroups(initialGroups);
-                        setError('✅ 系統已重置為最新乾淨狀態！請重新登入。');
+                // 彩蛋：劍點擊次數重置
+                const [swordClicks, setSwordClicks] = useState(0);
+
+                // 畫面載入時自動帶入記住的帳號密碼
+                useEffect(() => {
+                    if (rememberMe) {
+                        const savedName = localStorage.getItem('waku-raid-saved-name');
+                        const savedPwd = localStorage.getItem('waku-raid-saved-pwd');
+                        if (savedName) setLoginName(savedName);
+                        if (savedPwd) setPasscode(savedPwd);
                     }
+                }, [rememberMe]);
+
+                // 劍的點擊計時器：太久沒點就重置點擊次數
+                useEffect(() => {
+                    if (swordClicks > 0) {
+                        const timer = setTimeout(() => setSwordClicks(0), 600); // 0.6 秒內要連點
+                        return () => clearTimeout(timer);
+                    }
+                }, [swordClicks]);
+
+                const handleSwordClick = () => {
+                    const newCount = swordClicks + 1;
+                    setSwordClicks(newCount);
+                    if (newCount >= 3) {
+                        const pwd = window.prompt("⚠️ 系統重置警告\n請輸入最高管理員密碼以清空並重置所有資料：");
+                        if (pwd === "admin") {
+                            forceResetAccounts();
+                        } else if (pwd !== null) {
+                            alert("密碼錯誤，重置取消。");
+                        }
+                        setSwordClicks(0);
+                    }
+                };
+
+                const forceResetAccounts = () => {
+                    setAccounts(initialAccounts);
+                    setCharacters(initialCharacters);
+                    setAvailability(initialAvailability);
+                    setGroups(initialGroups);
+                    setError('✅ 系統已重置為最新乾淨狀態！請重新登入。');
                 };
 
                 const doLogin = () => {
@@ -378,6 +412,16 @@
                         : (acc.role === 'member' ? '1234' : 'admin');
 
                     if (String(passcode) === correctPasscode) {
+                        // 登入成功：處理記住密碼邏輯
+                        if (rememberMe) {
+                            localStorage.setItem('waku-raid-remember', 'true');
+                            localStorage.setItem('waku-raid-saved-name', loginName.trim());
+                            localStorage.setItem('waku-raid-saved-pwd', passcode);
+                        } else {
+                            localStorage.setItem('waku-raid-remember', 'false');
+                            localStorage.removeItem('waku-raid-saved-name');
+                            localStorage.removeItem('waku-raid-saved-pwd');
+                        }
                         handleLogin(acc.id);
                     } else {
                         setError('密碼錯誤！請確認密碼是否正確。');
@@ -393,13 +437,24 @@
                         setError('此名稱已被註冊！');
                         return;
                     }
+
+                    // 密碼安全防呆限制
+                    let finalPasscode = regPasscode.trim();
+                    if (finalPasscode !== '') {
+                        if (!/^[a-zA-Z0-9]{4,8}$/.test(finalPasscode)) {
+                            setError('密碼格式錯誤！只能使用英文與數字，且長度需為 4 到 8 碼。');
+                            return;
+                        }
+                    } else {
+                        finalPasscode = '1234'; // 預設密碼
+                    }
                     
                     const newAccId = 'a_' + Date.now();
                     const newAcc = {
                         id: newAccId,
                         playerName: regName.trim(),
                         role: 'member',
-                        passcode: regPasscode.trim() || '1234'
+                        passcode: finalPasscode
                     };
                     
                     setAccounts([...accounts, newAcc]);
@@ -407,15 +462,18 @@
                     setRegName('');
                     setRegPasscode('');
                     setLoginName(newAcc.playerName);
-                    setPasscode('');
-                    setError('✅ 註冊成功！請直接輸入密碼登入 (預設為 1234)。');
+                    setPasscode(finalPasscode); // 自動幫玩家填好剛設定好的密碼
+                    setError('✅ 註冊成功！已為您帶入帳號密碼，請直接點擊登入。');
                 };
 
                 return (
                     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col items-center justify-center p-4 relative transition-colors">
                         <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl max-w-sm w-full border-t-8 border-blue-500 z-10 transition-colors">
                             <div className="flex justify-between items-center mb-6">
-                                <h1 className="text-2xl font-black text-gray-800 dark:text-gray-100"><span className="text-blue-500">⚔️</span> 公會排班登入</h1>
+                                <h1 className="text-2xl font-black text-gray-800 dark:text-gray-100 flex items-center">
+                                    <span onClick={handleSwordClick} className="text-blue-500 mr-2 cursor-pointer select-none" title=" ">⚔️</span> 
+                                    公會排班登入
+                                </h1>
                                 <button onClick={() => setDarkMode(!darkMode)} className="text-xl p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="切換深色模式">
                                     {darkMode ? '☀️' : '🌙'}
                                 </button>
@@ -444,6 +502,16 @@
                                         onChange={e => setPasscode(e.target.value)} 
                                         onKeyDown={e => e.key === 'Enter' && doLogin()} 
                                     />
+                                    {/* 記住密碼 Checkbox */}
+                                    <label className="flex items-center space-x-2 mt-3 cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" 
+                                            checked={rememberMe} 
+                                            onChange={e => setRememberMe(e.target.checked)} 
+                                        />
+                                        <span className="text-sm font-bold text-gray-600 dark:text-gray-400">記住帳號密碼</span>
+                                    </label>
                                 </div>
                                 <button onClick={doLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition-colors shadow-lg mt-2">登入系統</button>
                                 
@@ -468,7 +536,7 @@
                                         </div>
                                         <div>
                                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">自訂密碼 (選填)</label>
-                                            <input type="password" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-green-500" placeholder="若不填，預設為 1234" value={regPasscode} onChange={e => setRegPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleRegister()} />
+                                            <input type="password" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-green-500" placeholder="限英數字4~8碼，不填預設為1234" value={regPasscode} onChange={e => setRegPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleRegister()} />
                                         </div>
                                     </div>
                                     <div className="mt-6 flex justify-end space-x-3">
@@ -478,14 +546,6 @@
                                 </div>
                             </div>
                         )}
-                        
-                        {/* 開啟強制重置按鈕讓管理者解鎖 */}
-                        <div className="mt-8 text-center">
-                            <button onClick={forceResetAccounts} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 underline transition-colors">
-                                🔄 載入最新預設帳號 (清除雲端舊帳號與密碼)
-                            </button>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">※ 若因先前測試導致密碼錯亂無法登入，可點此強制重置</p>
-                        </div>
                     </div>
                 );
             };
@@ -1203,7 +1263,7 @@
                                                                                                 </>
                                                                                             ) : '- 選擇隊員 -'}
                                                                                         </span>
-                                                                                        <svg className="w-4 h-4 ml-1 flex-shrink-0 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                                                        <svg className="w-4 h-4 ml-1 flex-shrink-0 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
                                                                                     </div>
                                                                                     {/* 隱藏但可點選的原生 Select (下拉會顯示完整資訊與精確的防呆分類) */}
                                                                                     <select 
