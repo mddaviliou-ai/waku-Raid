@@ -307,16 +307,6 @@
                 const [passcode, setPasscode] = useState('');
                 const [error, setError] = useState('');
 
-                const forceResetAccounts = () => {
-                    if(window.confirm('這將會清除雲端舊帳號與舊名單，並載入最新乾淨的初始狀態，確定要執行嗎？')) {
-                        setAccounts(initialAccounts);
-                        setCharacters(initialCharacters);
-                        setAvailability(initialAvailability);
-                        setGroups(initialGroups);
-                        setError('✅ 系統已重置為最新乾淨狀態！請重新選擇帳號登入。');
-                    }
-                };
-
                 const doLogin = () => {
                     const acc = accounts.find(a => a.id === selectedAcc);
                     const correctPasscode = acc.passcode ? String(acc.passcode) : (acc.role === 'member' ? '1234' : 'admin');
@@ -347,13 +337,6 @@
                                 </div>
                                 <button onClick={doLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition-colors shadow-lg mt-2">登入系統</button>
                             </div>
-                        </div>
-                        
-                        <div className="mt-8 text-center">
-                            <button onClick={forceResetAccounts} className="text-xs text-gray-400 hover:text-gray-600 underline">
-                                🔄 載入最新預設帳號 (清除雲端舊帳號)
-                            </button>
-                            <p className="text-[10px] text-gray-400 mt-1">※ 若下拉選單仍為舊名字，請點擊此按鈕進行強制更新</p>
                         </div>
                     </div>
                 );
@@ -626,7 +609,7 @@
                                                 <div className="flex flex-wrap gap-1">
                                                     {(avail.bosses || []).map(bId => {
                                                         const b = bosses.find(x => x.id === bId);
-                                                        const count = avail.bossCounts?.[bId] || 1;
+                                                        const count = parseInt(avail.bossCounts?.[bId]) || 1;
                                                         return b ? (
                                                             <span key={bId} style={{ borderColor: b.color, color: b.color }} className="bg-white px-1.5 py-0.5 rounded border text-xs font-bold shadow-sm whitespace-nowrap">
                                                                 {b.icon} {b.name} {count > 1 && `x${count}`}
@@ -648,6 +631,7 @@
                                                     <td key={dayIndex} className="p-2 border text-center align-top relative min-w-[90px]">
                                                         {isAvail ? (
                                                             <div className="flex flex-col items-center gap-1">
+                                                                {/* 顯示該日已被指派的隊伍標籤 */}
                                                                 {charGroupsOnDay.map(g => {
                                                                     const b = bosses.find(x => x.id === g.bossId);
                                                                     const tagColor = b ? b.color : '#3b82f6';
@@ -661,16 +645,17 @@
                                                                     )
                                                                 })}
 
+                                                                {/* 顯示剩餘可排的王團圖示 (只有當該日沒有被排入任何團時才顯示圖示) */}
                                                                 {charGroupsOnDay.length === 0 && (
                                                                     <div className="text-lg drop-shadow-sm select-none my-1 flex flex-wrap justify-center gap-2">
                                                                         {(avail.bosses || []).map(bId => {
                                                                             const b = bosses.find(x => x.id === bId);
                                                                             if (!b) return null;
                                                                             
-                                                                            const totalCount = avail.bossCounts?.[bId] || 1;
-                                                                            // 計算該角色目前總共被指派了幾次這個王團
+                                                                            // 精確計算：將場次轉為數字，並扣除所有日子中已被指派的總次數
+                                                                            const totalCount = parseInt(avail.bossCounts?.[bId]) || 1;
                                                                             const assignedCount = groups.filter(g => g.bossId === bId && (g.members.includes(char.id) || g.reserves.includes(char.id))).length;
-                                                                            const remainingCount = totalCount - assignedCount;
+                                                                            const remainingCount = Math.max(0, totalCount - assignedCount);
 
                                                                             if (remainingCount <= 0) {
                                                                                 // 次數用盡：顯示變灰防呆
