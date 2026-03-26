@@ -942,10 +942,16 @@
 
                 const getConflictGroup = (charId, currentGroupId, dayIndex) => {
                     if (!charId) return null;
+                    const targetChar = characters.find(c => c.id === charId);
+                    if (!targetChar) return null;
+
+                    // 【核心升級】：取得該玩家(帳號)底下的所有角色 ID，用於判斷「同帳號」的衝堂
+                    const sameAccountCharIds = characters.filter(c => c.accountId === targetChar.accountId).map(c => c.id);
+
                     const conflict = groups.find(g => 
                         g.id !== currentGroupId && 
                         g.dayIndex === parseInt(dayIndex) && 
-                        (g.members.includes(charId) || g.reserves.includes(charId))
+                        (g.members.some(m => sameAccountCharIds.includes(m)) || g.reserves.some(m => sameAccountCharIds.includes(m)))
                     );
                     return conflict ? conflict.name : null;
                 };
@@ -1009,6 +1015,7 @@
                                                         <thead>
                                                             <tr className="bg-gray-100">
                                                                 <th className="p-2 text-center w-10 border text-gray-600">#</th>
+                                                                {/* 修正：移除表頭錯誤的 (⚠️衝堂) 常駐文字 */}
                                                                 <th className="p-2 text-left border w-2/5">角色名稱</th>
                                                                 <th className="p-2 text-center border w-1/4">職業Lv.</th>
                                                                 <th className="p-2 text-left border">報名備註</th>
@@ -1021,9 +1028,7 @@
                                                                 const conflictName = getConflictGroup(memberId, group.id, group.dayIndex);
                                                                 
                                                                 let isOverQuota = false;
-                                                                let isDuplicateInGroup = false;
                                                                 
-                                                                // 【防呆】檢查已經選進來的人，有沒有超過次數或是在同一團出現兩次
                                                                 if (memberId && char) {
                                                                     const cAvail = availability[memberId];
                                                                     const isBossChecked = cAvail && cAvail.bosses && cAvail.bosses.includes(group.bossId);
@@ -1031,13 +1036,11 @@
                                                                     const assignedCount = groups.filter(grp => grp.bossId === group.bossId && (grp.members.includes(memberId) || grp.reserves.includes(memberId))).length;
                                                                     
                                                                     if (assignedCount > totalCount) isOverQuota = true;
-                                                                    if (group.members.filter(m => m === memberId).length > 1) isDuplicateInGroup = true;
                                                                 }
                                                                 
                                                                 let warnArr = [];
                                                                 if (conflictName) warnArr.push(`衝堂: ${conflictName}`);
                                                                 if (isOverQuota) warnArr.push(`超排/未報名`);
-                                                                if (isDuplicateInGroup) warnArr.push(`重複入隊`);
                                                                 
                                                                 const warningText = warnArr.length > 0 ? `(⚠️ ${warnArr.join(', ')})` : '';
 
