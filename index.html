@@ -366,16 +366,20 @@
             // --- 元件：會員報名頁面 ---
             const MemberSchedule = () => {
                 const myCharacters = characters.filter(c => c.accountId === currentAccount.id);
+                // 新增：解耦打字與雲端同步的本地暫存狀態
+                const [localAvail, setLocalAvail] = useState({});
+
+                const getAvail = (charId) => localAvail[charId] || availability[charId] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
 
                 const toggleDay = (charId, index) => {
-                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
+                    const charAvail = getAvail(charId);
                     const newDays = [...charAvail.days];
                     newDays[index] = !newDays[index];
-                    setAvailability({ ...availability, [charId]: { ...charAvail, days: newDays } });
+                    setLocalAvail({ ...localAvail, [charId]: { ...charAvail, days: newDays } });
                 };
 
                 const toggleBoss = (charId, bossId) => {
-                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
+                    const charAvail = getAvail(charId);
                     const currentBosses = charAvail.bosses || [];
                     const currentCounts = charAvail.bossCounts || {};
 
@@ -383,10 +387,10 @@
                         const newBosses = currentBosses.filter(id => id !== bossId);
                         const newCounts = { ...currentCounts };
                         delete newCounts[bossId];
-                        setAvailability({ ...availability, [charId]: { ...charAvail, bosses: newBosses, bossCounts: newCounts } });
+                        setLocalAvail({ ...localAvail, [charId]: { ...charAvail, bosses: newBosses, bossCounts: newCounts } });
                     } else {
-                        setAvailability({ 
-                            ...availability, 
+                        setLocalAvail({ 
+                            ...localAvail, 
                             [charId]: { 
                                 ...charAvail, 
                                 bosses: [...currentBosses, bossId],
@@ -397,9 +401,9 @@
                 };
 
                 const updateBossCount = (charId, bossId, count) => {
-                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
-                    setAvailability({
-                        ...availability,
+                    const charAvail = getAvail(charId);
+                    setLocalAvail({
+                        ...localAvail,
                         [charId]: {
                             ...charAvail,
                             bossCounts: { ...(charAvail.bossCounts || {}), [bossId]: count }
@@ -408,8 +412,18 @@
                 };
 
                 const updateNote = (charId, e) => {
-                    const charAvail = availability[charId] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
-                    setAvailability({ ...availability, [charId]: { ...charAvail, note: e.target.value } });
+                    const charAvail = getAvail(charId);
+                    setLocalAvail({ ...localAvail, [charId]: { ...charAvail, note: e.target.value } });
+                };
+
+                // 將本地狀態一次性推送到雲端
+                const saveToCloud = () => {
+                    if (Object.keys(localAvail).length > 0) {
+                        const mergedAvailability = { ...availability, ...localAvail };
+                        setAvailability(mergedAvailability);
+                        setLocalAvail({}); // 儲存後清空本地暫存，重新依賴雲端
+                    }
+                    setAlertMessage('報名資料已成功儲存！');
                 };
 
                 return (
@@ -426,7 +440,7 @@
                         </div>
 
                         {myCharacters.map((char) => {
-                            const charAvail = availability[char.id] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
+                            const charAvail = getAvail(char.id);
                             return (
                                 <div key={char.id} className="bg-white p-6 rounded-lg shadow border border-gray-100">
                                     <div className="mb-4 flex justify-between items-center border-b pb-2">
@@ -521,7 +535,7 @@
                         })}
 
                         <div className="text-right">
-                            <button onClick={() => setAlertMessage('報名資料已成功儲存！')} className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-lg">
+                            <button onClick={saveToCloud} className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-lg">
                                 儲存報名資料
                             </button>
                         </div>
@@ -606,6 +620,7 @@
                                             </td>
                                             <td className="p-2 border">
                                                 <span style={getJobStyle(char.jobTypeId)} className="px-2 py-1 rounded text-xs font-bold shadow-sm">{char.job}</span>
+                                                <div className="text-[11px] text-gray-500 font-bold mt-1 pl-1">Lv.{char.level}</div>
                                             </td>
                                             <td className="p-2 border">
                                                 <div className="flex flex-wrap gap-1">
@@ -808,7 +823,7 @@
                                                                                         const warningText = conflictName ? `(⚠️本日已排: ${conflictName})` : '';
                                                                                         return (
                                                                                             <option key={c.id} value={c.id}>
-                                                                                                [{c.job}] {c.name} {warningText}
+                                                                                                [{c.job}] {c.name} (Lv.{c.level}) {warningText}
                                                                                             </option>
                                                                                         )
                                                                                     })}
@@ -819,6 +834,7 @@
                                                                                         <>
                                                                                             <span style={getJobStyle(char.jobTypeId)} className="px-2 py-1 rounded text-xs font-bold shadow-sm">{char.job}</span>
                                                                                             <span className="font-bold">{char.name}</span>
+                                                                                            <span className="text-xs text-gray-500 font-bold">Lv.{char.level}</span>
                                                                                         </>
                                                                                     ) : '-'}
                                                                                 </div>
