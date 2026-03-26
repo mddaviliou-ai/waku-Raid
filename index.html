@@ -182,15 +182,16 @@
                 if (!user || !db) return;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main');
                 const unsub = onSnapshot(docRef, (snap) => {
+                    // 全面防護網：加上 || 預設值，避免雲端資料欄位遺失導致白畫面
                     if (snap.exists()) {
                         const data = snap.data();
-                        if(data.bosses) _setBosses(data.bosses);
-                        if(data.jobCategories) _setJobCategories(data.jobCategories);
-                        if(data.accounts) _setAccounts(data.accounts);
-                        if(data.characters) _setCharacters(data.characters);
-                        if(data.availability) _setAvailability(data.availability);
-                        if(data.groups) _setGroups(data.groups);
-                        if(data.weekStartDate) _setWeekStartDate(data.weekStartDate);
+                        _setBosses(data.bosses || initialBosses);
+                        _setJobCategories(data.jobCategories || initialJobCategories);
+                        _setAccounts(data.accounts || initialAccounts);
+                        _setCharacters(data.characters || initialCharacters);
+                        _setAvailability(data.availability || initialAvailability);
+                        _setGroups(data.groups || initialGroups);
+                        _setWeekStartDate(data.weekStartDate || new Date().toISOString().split('T')[0]);
                     } else {
                         setDoc(docRef, { bosses, jobCategories, accounts, characters, availability, groups, weekStartDate });
                     }
@@ -204,12 +205,14 @@
                 return Array.from({length: 7}).map((_, i) => {
                     const d = new Date(start);
                     d.setDate(d.getDate() + i);
+                    // 防止 Invalid Date 導致 NaN 錯誤
+                    if (isNaN(d.getTime())) return `日期錯誤`; 
                     return `${d.getMonth()+1}/${d.getDate()} ${wdays[d.getDay()]}`;
                 });
             }, [weekStartDate]);
             
             const [loggedInId, setLoggedInId] = useState(() => localStorage.getItem('waku-raid-loggedInId') || null);
-            const currentAccount = accounts.find(a => a.id === loggedInId) || null;
+            const currentAccount = (accounts || []).find(a => a.id === loggedInId) || null;
             const [activeTab, setActiveTab] = useState('my-schedule');
 
             const handleLogin = (id) => {
@@ -239,7 +242,7 @@
 
             // --- 【核心升級】深色模式下的職業顏色動態提亮 ---
             const getJobStyle = (typeId, isWhiteBg = false) => {
-                const jc = jobCategories.find(j => j.id === typeId);
+                const jc = (jobCategories || []).find(j => j.id === typeId);
                 if (jc) {
                     return { 
                         backgroundColor: darkMode ? '#1f2937' : (isWhiteBg ? '#ffffff' : jc.bgColor), 
@@ -257,9 +260,9 @@
             };
 
             const handleOpenCreateModal = (dayIdx = 0) => {
-                const defaultBossId = bosses[0]?.id || '';
-                const defaultBossName = bosses[0]?.name || '';
-                const bossGroupsCount = groups.filter(g => g.bossId === defaultBossId).length;
+                const defaultBossId = bosses && bosses[0] ? bosses[0].id : '';
+                const defaultBossName = bosses && bosses[0] ? bosses[0].name : '';
+                const bossGroupsCount = (groups || []).filter(g => g.bossId === defaultBossId).length;
                 const defaultGroupName = defaultBossId ? `${bossGroupsCount + 1}.${defaultBossName}` : '';
 
                 setNewGroup({ 
@@ -276,7 +279,7 @@
                     setAlertMessage('請填寫完整資訊');
                     return;
                 }
-                setGroups([...groups, {
+                setGroups([...(groups || []), {
                     id: 'g' + Date.now(),
                     bossId: newGroup.bossId,
                     name: newGroup.name,
@@ -295,7 +298,7 @@
                 }
 
                 if (editCharId) {
-                    setCharacters(characters.map(c => c.id === editCharId ? { 
+                    setCharacters((characters || []).map(c => c.id === editCharId ? { 
                         ...c, 
                         name: currentAccount.playerName, 
                         job: newChar.job, 
@@ -304,7 +307,7 @@
                     } : c));
                 } else {
                     const newCharId = 'c_' + Date.now();
-                    setCharacters([...characters, { 
+                    setCharacters([...(characters || []), { 
                         id: newCharId, 
                         accountId: currentAccount.id, 
                         name: currentAccount.playerName, 
@@ -314,7 +317,7 @@
                     }]);
                     
                     setAvailability({
-                        ...availability,
+                        ...(availability || {}),
                         [newCharId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' }
                     });
                 }
@@ -325,17 +328,17 @@
 
             const confirmDeleteChar = () => {
                 if (!charToDelete) return;
-                setCharacters(characters.filter(c => c.id !== charToDelete));
-                const newGroups = groups.map(g => ({
+                setCharacters((characters || []).filter(c => c.id !== charToDelete));
+                const newGroups = (groups || []).map(g => ({
                     ...g,
-                    members: g.members.map(m => m === charToDelete ? '' : m),
-                    reserves: g.reserves.map(m => m === charToDelete ? '' : m)
+                    members: (g.members || []).map(m => m === charToDelete ? '' : m),
+                    reserves: (g.reserves || []).map(m => m === charToDelete ? '' : m)
                 }));
                 setGroups(newGroups);
                 setCharToDelete(null);
             };
 
-            const groupedJobs = jobCategories.reduce((acc, jc) => {
+            const groupedJobs = (jobCategories || []).reduce((acc, jc) => {
                 const g = jc.group || '其他';
                 if (!acc[g]) acc[g] = [];
                 acc[g].push(jc);
@@ -399,7 +402,7 @@
 
                 const doLogin = () => {
                     // 防呆：忽略大小寫與前後空白進行比對
-                    const acc = accounts.find(a => a.playerName.toLowerCase() === loginName.trim().toLowerCase());
+                    const acc = (accounts || []).find(a => (a.playerName || '').toLowerCase() === loginName.trim().toLowerCase());
 
                     if (!acc) {
                         setError('找不到此帳號，請確認名稱是否正確或前往註冊！');
@@ -433,7 +436,7 @@
                         setError('請填寫 ID: DC名稱！');
                         return;
                     }
-                    if (accounts.some(a => a.playerName.toLowerCase() === regName.trim().toLowerCase())) {
+                    if ((accounts || []).some(a => (a.playerName || '').toLowerCase() === regName.trim().toLowerCase())) {
                         setError('此名稱已被註冊！');
                         return;
                     }
@@ -457,7 +460,7 @@
                         passcode: finalPasscode
                     };
                     
-                    setAccounts([...accounts, newAcc]);
+                    setAccounts([...(accounts || []), newAcc]);
                     setIsRegisterOpen(false);
                     setRegName('');
                     setRegPasscode('');
@@ -556,11 +559,20 @@
 
             // --- 元件：會員報名頁面 ---
             const MemberSchedule = () => {
-                const myCharacters = characters.filter(c => c.accountId === currentAccount.id);
+                const myCharacters = (characters || []).filter(c => c.accountId === currentAccount.id);
+                
                 // 解耦打字與雲端同步的本地暫存狀態
                 const [localAvail, setLocalAvail] = useState({});
 
-                const getAvail = (charId) => localAvail[charId] || availability[charId] || { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
+                const getAvail = (charId) => {
+                    const base = localAvail[charId] || (availability || {})[charId] || {};
+                    return {
+                        days: base.days || Array(7).fill(false),
+                        bosses: base.bosses || [],
+                        bossCounts: base.bossCounts || {},
+                        note: base.note || ''
+                    };
+                };
 
                 const toggleDay = (charId, index) => {
                     const charAvail = getAvail(charId);
@@ -568,7 +580,7 @@
 
                     if (isCurrentlyChecked) {
                         // 防呆：如果要取消勾選，檢查這天是不是已經有被排團了
-                        const scheduledOnDay = groups.some(g => g.dayIndex === index && (g.members.includes(charId) || g.reserves.includes(charId)));
+                        const scheduledOnDay = (groups || []).some(g => g.dayIndex === index && ((g.members || []).includes(charId) || (g.reserves || []).includes(charId)));
                         if (scheduledOnDay) {
                             setAlertMessage(`⚠️ 取消失敗！\n此角色在 ${days[index].split(' ')[0]} 已經被排入隊伍了。\n若需請假，請聯絡管理員協助移除。`);
                             return; // 阻止取消勾選
@@ -587,9 +599,9 @@
 
                     if (currentBosses.includes(bossId)) {
                         // 防呆：如果要取消勾選某個王，檢查是不是已經被排入該王的隊伍
-                        const assignedCount = groups.filter(g => g.bossId === bossId && (g.members.includes(charId) || g.reserves.includes(charId))).length;
+                        const assignedCount = (groups || []).filter(g => g.bossId === bossId && ((g.members || []).includes(charId) || (g.reserves || []).includes(charId))).length;
                         if (assignedCount > 0) {
-                            setAlertMessage(`⚠️ 取消失敗！\n此角色已被排入 ${assignedCount} 個「${bosses.find(b=>b.id===bossId)?.name}」隊伍。\n若需取消報名，請聯絡管理員協助移除。`);
+                            setAlertMessage(`⚠️ 取消失敗！\n此角色已被排入 ${assignedCount} 個「${(bosses || []).find(b=>b.id===bossId)?.name}」隊伍。\n若需取消報名，請聯絡管理員協助移除。`);
                             return; // 阻止取消勾選
                         }
 
@@ -611,9 +623,9 @@
 
                 const updateBossCount = (charId, bossId, count) => {
                     // 防呆：如果要減少場次，檢查減少後的數字是不是低於「已經被排入的隊伍數量」
-                    const assignedCount = groups.filter(g => g.bossId === bossId && (g.members.includes(charId) || g.reserves.includes(charId))).length;
+                    const assignedCount = (groups || []).filter(g => g.bossId === bossId && ((g.members || []).includes(charId) || (g.reserves || []).includes(charId))).length;
                     if (count < assignedCount) {
-                        setAlertMessage(`⚠️ 修改失敗！\n此角色已經被排入 ${assignedCount} 個「${bosses.find(b=>b.id===bossId)?.name}」隊伍。\n報名場次不能低於已排入的數量，若需修改請聯絡管理員。`);
+                        setAlertMessage(`⚠️ 修改失敗！\n此角色已經被排入 ${assignedCount} 個「${(bosses || []).find(b=>b.id===bossId)?.name}」隊伍。\n報名場次不能低於已排入的數量，若需修改請聯絡管理員。`);
                         return; // 阻止修改數字
                     }
 
@@ -635,7 +647,7 @@
                 // 將本地狀態一次性推送到雲端
                 const saveToCloud = () => {
                     if (Object.keys(localAvail).length > 0) {
-                        const mergedAvailability = { ...availability, ...localAvail };
+                        const mergedAvailability = { ...(availability || {}), ...localAvail };
                         setAvailability(mergedAvailability);
                         setLocalAvail({}); // 儲存後清空本地暫存，重新依賴雲端
                     }
@@ -684,7 +696,7 @@
                                     <div className="mb-6 bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-100 dark:border-orange-800/30">
                                         <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週想打的王與場次數 (可複選)：</h3>
                                         <div className="flex flex-wrap gap-4">
-                                            {bosses.map(boss => {
+                                            {(bosses || []).map(boss => {
                                                 const isChecked = (charAvail.bosses || []).includes(boss.id);
                                                 const count = (charAvail.bossCounts && charAvail.bossCounts[boss.id]) ? charAvail.bossCounts[boss.id] : 1;
                                                 return (
@@ -727,7 +739,7 @@
                                                     <input 
                                                         type="checkbox" 
                                                         className="w-5 h-5 mb-1 text-blue-600 bg-gray-100 dark:bg-gray-600 border-gray-300 dark:border-gray-500"
-                                                        checked={charAvail.days[index]}
+                                                        checked={charAvail.days[index] || false}
                                                         onChange={() => toggleDay(char.id, index)}
                                                     />
                                                     <span className="font-bold text-sm text-gray-800 dark:text-gray-100">{day.split(' ')[0]}</span>
@@ -766,17 +778,18 @@
 
                 const assignCharToGroup = (charId, groupId) => {
                     if (!groupId) return;
-                    const group = groups.find(g => g.id === groupId);
-                    const emptyIdx = group.members.findIndex(m => m === '');
+                    const group = (groups || []).find(g => g.id === groupId);
+                    if (!group) return;
+                    const emptyIdx = (group.members || []).findIndex(m => m === '');
                     
                     if (emptyIdx === -1) {
                         setAlertMessage(`「${group.name}」的正式隊員已滿！\n請至「王團編組排班」頁面手動將其加入候補。`);
                         return;
                     }
                     
-                    const newGroups = groups.map(g => {
+                    const newGroups = (groups || []).map(g => {
                         if (g.id === groupId) {
-                            const newMembers = [...g.members];
+                            const newMembers = [...(g.members || [])];
                             newMembers[emptyIdx] = charId;
                             return { ...g, members: newMembers };
                         }
@@ -786,10 +799,10 @@
                 };
 
                 const removeCharFromGroup = (charId, groupId) => {
-                    const newGroups = groups.map(g => {
+                    const newGroups = (groups || []).map(g => {
                         if (g.id === groupId) {
-                            const newMembers = g.members.map(m => m === charId ? '' : m);
-                            const newReserves = g.reserves.map(m => m === charId ? '' : m);
+                            const newMembers = (g.members || []).map(m => m === charId ? '' : m);
+                            const newReserves = (g.reserves || []).map(m => m === charId ? '' : m);
                             return { ...g, members: newMembers, reserves: newReserves };
                         }
                         return g;
@@ -798,13 +811,13 @@
                 };
 
                 const sortedCharacters = useMemo(() => {
-                    let sorted = [...characters];
+                    let sorted = [...(characters || [])];
                     if (sortMode === 'name') {
                         sorted.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
                     } else if (sortMode === 'job') {
                         sorted.sort((a, b) => {
-                            const jcA = jobCategories.find(j => j.id === a.jobTypeId);
-                            const jcB = jobCategories.find(j => j.id === b.jobTypeId);
+                            const jcA = (jobCategories || []).find(j => j.id === a.jobTypeId);
+                            const jcB = (jobCategories || []).find(j => j.id === b.jobTypeId);
                             const groupA = jcA ? (jcA.group || '其他') : '其他';
                             const groupB = jcB ? (jcB.group || '其他') : '其他';
                             
@@ -824,9 +837,9 @@
                 // 處理分頁過濾邏輯
                 const displayCharacters = useMemo(() => {
                     return sortedCharacters.filter(char => {
-                        const avail = availability[char.id];
+                        const avail = (availability || {})[char.id] || {};
                         // 必須有勾選日期才算有報名
-                        if (!avail || !avail.days.some(d => d)) return false;
+                        if (!avail.days || !avail.days.some(d => d)) return false;
                         // 如果有選擇特定王團分頁，檢查該角色是否有報名該王團
                         if (matrixBossTab !== 'all') {
                             if (!avail.bosses || !avail.bosses.includes(matrixBossTab)) return false;
@@ -849,7 +862,7 @@
                             >
                                 📋 報名總表
                             </button>
-                            {bosses.map(boss => (
+                            {(bosses || []).map(boss => (
                                 <button 
                                     key={boss.id}
                                     className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all shadow-sm ${matrixBossTab === boss.id ? 'scale-105' : 'hover:bg-gray-50 dark:hover:bg-gray-700 opacity-70 hover:opacity-100'}`}
@@ -925,16 +938,19 @@
                             </thead>
                             <tbody>
                                 {displayCharacters.map(char => {
-                                    const avail = availability[char.id];
+                                    const avail = (availability || {})[char.id] || {};
+                                    const safeDays = avail.days || Array(7).fill(false);
+                                    const safeBosses = avail.bosses || [];
+                                    const safeBossCounts = avail.bossCounts || {};
                                     
                                     // 取得該帳號所有角色的 ID (用來做跨角色的防呆提示)
-                                    const sameAccountCharIds = characters.filter(c => c.accountId === char.accountId).map(c => c.id);
+                                    const sameAccountCharIds = (characters || []).filter(c => c.accountId === char.accountId).map(c => c.id);
 
                                     return (
                                         <tr key={char.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b dark:border-gray-700">
                                             <td className="p-2 border dark:border-gray-700 font-bold text-gray-800 dark:text-gray-200">
                                                 {char.name}<br/>
-                                                <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">{accounts.find(a => a.id === char.accountId)?.playerName}</span>
+                                                <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">{(accounts || []).find(a => a.id === char.accountId)?.playerName}</span>
                                             </td>
                                             <td className="p-2 border dark:border-gray-700">
                                                 <span style={getJobStyle(char.jobTypeId)} className="px-2 py-1 rounded text-xs font-bold shadow-sm">{char.job}</span>
@@ -942,9 +958,9 @@
                                             </td>
                                             <td className="p-2 border dark:border-gray-700">
                                                 <div className="flex flex-wrap gap-1">
-                                                    {(avail.bosses || []).map(bId => {
-                                                        const b = bosses.find(x => x.id === bId);
-                                                        const count = parseInt(avail.bossCounts?.[bId]) || 1;
+                                                    {safeBosses.map(bId => {
+                                                        const b = (bosses || []).find(x => x.id === bId);
+                                                        const count = parseInt(safeBossCounts[bId]) || 1;
                                                         return b ? (
                                                             <span key={bId} style={{ borderColor: b.color, color: b.color }} className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded border text-xs font-bold shadow-sm whitespace-nowrap">
                                                                 {b.icon} {b.name} {count > 1 && `x${count}`}
@@ -953,29 +969,29 @@
                                                     })}
                                                 </div>
                                             </td>
-                                            <td className="p-2 border dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs whitespace-normal min-w-[120px]">{avail.note}</td>
-                                            {avail.days.map((isAvail, dayIndex) => {
-                                                const charGroupsOnDay = groups.filter(g => g.dayIndex === dayIndex && (g.members.includes(char.id) || g.reserves.includes(char.id)));
+                                            <td className="p-2 border dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs whitespace-normal min-w-[120px]">{avail.note || ''}</td>
+                                            {safeDays.map((isAvail, dayIndex) => {
+                                                const charGroupsOnDay = (groups || []).filter(g => g.dayIndex === dayIndex && ((g.members || []).includes(char.id) || (g.reserves || []).includes(char.id)));
                                                 
                                                 // 【同帳號跨角色防呆】：找出該「帳號」這天有沒有排其他的團
-                                                const accountGroupsOnDay = groups.filter(g => 
+                                                const accountGroupsOnDay = (groups || []).filter(g => 
                                                     g.dayIndex === dayIndex && 
-                                                    (g.members.some(m => sameAccountCharIds.includes(m)) || g.reserves.some(m => sameAccountCharIds.includes(m)))
+                                                    ((g.members || []).some(m => sameAccountCharIds.includes(m)) || (g.reserves || []).some(m => sameAccountCharIds.includes(m)))
                                                 );
                                                 
                                                 // 過濾快速指派選單
-                                                const availableGroupsOnDay = groups.filter(g => {
+                                                const availableGroupsOnDay = (groups || []).filter(g => {
                                                     if (g.dayIndex !== dayIndex) return false;
-                                                    if (g.members.includes(char.id) || g.reserves.includes(char.id)) return false;
+                                                    if ((g.members || []).includes(char.id) || (g.reserves || []).includes(char.id)) return false;
                                                     
                                                     const bId = g.bossId;
-                                                    if (!(avail.bosses || []).includes(bId)) return false;
+                                                    if (!safeBosses.includes(bId)) return false;
                                                     
                                                     // 如果有選擇王團分頁，不顯示其他王團的快速指派
                                                     if (matrixBossTab !== 'all' && bId !== matrixBossTab) return false;
                                                     
-                                                    const totalCount = parseInt(avail.bossCounts?.[bId]) || 1;
-                                                    const assignedCount = groups.filter(grp => grp.bossId === bId && (grp.members.includes(char.id) || grp.reserves.includes(char.id))).length;
+                                                    const totalCount = parseInt(safeBossCounts[bId]) || 1;
+                                                    const assignedCount = (groups || []).filter(grp => grp.bossId === bId && ((grp.members || []).includes(char.id) || (grp.reserves || []).includes(char.id))).length;
                                                     const remainingCount = Math.max(0, totalCount - assignedCount);
                                                     
                                                     return remainingCount > 0;
@@ -987,15 +1003,15 @@
                                                             <div className="flex flex-col items-center gap-1">
                                                                 {/* 顯示該日已被指派的隊伍標籤 */}
                                                                 {charGroupsOnDay.map(g => {
-                                                                    const b = bosses.find(x => x.id === g.bossId);
+                                                                    const b = (bosses || []).find(x => x.id === g.bossId);
                                                                     const tagColor = b ? b.color : '#3b82f6';
                                                                     
                                                                     // 如果這個帳號在這天還有被排入「其他」團（或是同一團被塞了另一隻分身），則顯示衝堂警告
                                                                     const conflictGroups = accountGroupsOnDay.filter(ag => {
                                                                         if (ag.id === g.id) {
                                                                             // 如果是同一個隊伍，檢查有沒有塞入同帳號的「另一隻」角色
-                                                                            return ag.members.some(m => m !== char.id && sameAccountCharIds.includes(m)) || 
-                                                                                   ag.reserves.some(m => m !== char.id && sameAccountCharIds.includes(m));
+                                                                            return (ag.members || []).some(m => m !== char.id && sameAccountCharIds.includes(m)) || 
+                                                                                   (ag.reserves || []).some(m => m !== char.id && sameAccountCharIds.includes(m));
                                                                         }
                                                                         return true; // 只要是別的隊伍就算衝堂
                                                                     });
@@ -1019,14 +1035,14 @@
                                                                 {/* 顯示剩餘可排的王團圖示 (只有當該日沒有被排入任何團時才顯示圖示) */}
                                                                 {charGroupsOnDay.length === 0 && (
                                                                     <div className="text-lg drop-shadow-sm select-none my-1 flex flex-wrap justify-center gap-2">
-                                                                        {(avail.bosses || []).map(bId => {
-                                                                            const b = bosses.find(x => x.id === bId);
+                                                                        {safeBosses.map(bId => {
+                                                                            const b = (bosses || []).find(x => x.id === bId);
                                                                             if (!b) return null;
                                                                             // 如果正在使用分頁過濾，只顯示該分頁的王團圖示
                                                                             if (matrixBossTab !== 'all' && b.id !== matrixBossTab) return null;
                                                                             
-                                                                            const totalCount = parseInt(avail.bossCounts?.[bId]) || 1;
-                                                                            const assignedCount = groups.filter(g => g.bossId === bId && (g.members.includes(char.id) || g.reserves.includes(char.id))).length;
+                                                                            const totalCount = parseInt(safeBossCounts[bId]) || 1;
+                                                                            const assignedCount = (groups || []).filter(g => g.bossId === bId && ((g.members || []).includes(char.id) || (g.reserves || []).includes(char.id))).length;
                                                                             const remainingCount = Math.max(0, totalCount - assignedCount);
 
                                                                             if (remainingCount <= 0) {
@@ -1048,7 +1064,7 @@
                                                                                 );
                                                                             }
                                                                         })}
-                                                                        {!(avail.bosses && avail.bosses.length > 0) && <span className="font-bold text-red-500 text-sm tracking-normal">V</span>}
+                                                                        {!(safeBosses && safeBosses.length > 0) && <span className="font-bold text-red-500 text-sm tracking-normal">V</span>}
                                                                     </div>
                                                                 )}
 
@@ -1073,7 +1089,7 @@
                                                                             })}
                                                                         </select>
                                                                     ) : (
-                                                                        charGroupsOnDay.length === 0 && !groups.some(g => g.dayIndex === dayIndex) && (
+                                                                        charGroupsOnDay.length === 0 && !(groups || []).some(g => g.dayIndex === dayIndex) && (
                                                                             <div className="w-full text-[10px] text-gray-400 text-center mt-1 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded py-0.5" title="請先至排班頁面新增該日期的王團">
                                                                                 本日未開團
                                                                             </div>
@@ -1099,7 +1115,7 @@
             // --- 元件：排團管理 ---
             const RaidPlanner = ({ onOpenCreateModal }) => {
                 const [filterMode, setFilterMode] = useState('all'); // 新增：過濾模式
-                const myCharIds = characters.filter(c => c.accountId === currentAccount.id).map(c => c.id);
+                const myCharIds = (characters || []).filter(c => c.accountId === currentAccount.id).map(c => c.id);
 
                 const handleDeleteGroup = (groupId) => {
                     setGroupToDelete(groupId);
@@ -1107,32 +1123,32 @@
 
                 const getConflictGroupNames = (charId, currentGroupId, dayIndex) => {
                     if (!charId) return [];
-                    const targetChar = characters.find(c => c.id === charId);
+                    const targetChar = (characters || []).find(c => c.id === charId);
                     if (!targetChar) return [];
 
                     // 取得該玩家(帳號)底下的所有角色 ID，用於判斷「同帳號跨角色」的衝堂
-                    const sameAccountCharIds = characters.filter(c => c.accountId === targetChar.accountId).map(c => c.id);
+                    const sameAccountCharIds = (characters || []).filter(c => c.accountId === targetChar.accountId).map(c => c.id);
 
-                    const conflicts = groups.filter(g => {
+                    const conflicts = (groups || []).filter(g => {
                         if (g.dayIndex !== parseInt(dayIndex)) return false;
                         
                         if (g.id === currentGroupId) {
                             // 對於當前的這個隊伍，如果裡面已經塞了同帳號的「另一隻」分身，就算是衝堂
-                            return g.members.some(m => m !== charId && sameAccountCharIds.includes(m)) || 
-                                   g.reserves.some(m => m !== charId && sameAccountCharIds.includes(m));
+                            return (g.members || []).some(m => m !== charId && sameAccountCharIds.includes(m)) || 
+                                   (g.reserves || []).some(m => m !== charId && sameAccountCharIds.includes(m));
                         } else {
                             // 對於其他隊伍，只要有這個帳號的任何一隻角色，就算是衝堂
-                            return g.members.some(m => sameAccountCharIds.includes(m)) || 
-                                   g.reserves.some(m => sameAccountCharIds.includes(m));
+                            return (g.members || []).some(m => sameAccountCharIds.includes(m)) || 
+                                   (g.reserves || []).some(m => sameAccountCharIds.includes(m));
                         }
                     });
                     return conflicts.map(c => c.name);
                 };
 
                 const handleAssign = (groupId, slotType, slotIndex, charId) => {
-                    const newGroups = groups.map(g => {
+                    const newGroups = (groups || []).map(g => {
                         if (g.id === groupId) {
-                            const updatedList = [...g[slotType]];
+                            const updatedList = [...(g[slotType] || [])];
                             updatedList[slotIndex] = charId;
                             return { ...g, [slotType]: updatedList };
                         }
@@ -1164,12 +1180,12 @@
                             )}
                         </div>
 
-                        {bosses.map(boss => {
-                            const bossGroups = groups.filter(g => {
+                        {(bosses || []).map(boss => {
+                            const bossGroups = (groups || []).filter(g => {
                                 if (g.bossId !== boss.id) return false;
                                 if (filterMode === 'mine') {
                                     // 只顯示有包含自己角色的隊伍
-                                    return g.members.some(mId => myCharIds.includes(mId)) || g.reserves.some(mId => myCharIds.includes(mId));
+                                    return (g.members || []).some(mId => myCharIds.includes(mId)) || (g.reserves || []).some(mId => myCharIds.includes(mId));
                                 }
                                 return true;
                             });
@@ -1184,7 +1200,9 @@
                                     </h3>
                                     
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                        {bossGroups.map(group => (
+                                        {bossGroups.map(group => {
+                                            const safeMembers = group.members || ['', '', '', '', '', ''];
+                                            return (
                                             <div key={group.id} className="bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden">
                                                 <div className="bg-gray-200 dark:bg-gray-700 border-b border-gray-300 dark:border-gray-600 p-3 flex justify-between items-center">
                                                     <h4 className="font-bold text-gray-800 dark:text-gray-100">{group.name}</h4>
@@ -1214,9 +1232,9 @@
                                                             </tr>
                                                         </thead>
                                                         <tbody>
-                                                            {group.members.map((memberId, idx) => {
-                                                                const char = characters.find(c => c.id === memberId);
-                                                                const avail = char ? availability[char.id] : null;
+                                                            {safeMembers.map((memberId, idx) => {
+                                                                const char = (characters || []).find(c => c.id === memberId);
+                                                                const avail = char ? (availability || {})[char.id] : null;
                                                                 
                                                                 // 取得目前格子的衝突資訊
                                                                 const conflictNames = getConflictGroupNames(memberId, group.id, group.dayIndex);
@@ -1226,13 +1244,13 @@
                                                                 
                                                                 // 【防呆】檢查已經選進來的人，有沒有超過次數或是在同一團出現兩次
                                                                 if (memberId && char) {
-                                                                    const cAvail = availability[memberId];
-                                                                    const isBossChecked = cAvail && cAvail.bosses && cAvail.bosses.includes(group.bossId);
+                                                                    const cAvail = (availability || {})[memberId] || {};
+                                                                    const isBossChecked = cAvail.bosses && cAvail.bosses.includes(group.bossId);
                                                                     const totalCount = isBossChecked ? (parseInt(cAvail.bossCounts?.[group.bossId]) || 1) : 0;
-                                                                    const assignedCount = groups.filter(grp => grp.bossId === group.bossId && (grp.members.includes(memberId) || grp.reserves.includes(memberId))).length;
+                                                                    const assignedCount = (groups || []).filter(grp => grp.bossId === group.bossId && ((grp.members || []).includes(memberId) || (grp.reserves || []).includes(memberId))).length;
                                                                     
                                                                     if (assignedCount > totalCount) isOverQuota = true;
-                                                                    if (group.members.filter(m => m === memberId).length > 1) isDuplicateInGroup = true;
+                                                                    if (safeMembers.filter(m => m === memberId).length > 1) isDuplicateInGroup = true;
                                                                 }
                                                                 
                                                                 let warnArr = [];
@@ -1263,7 +1281,7 @@
                                                                                                 </>
                                                                                             ) : '- 選擇隊員 -'}
                                                                                         </span>
-                                                                                        <svg className="w-4 h-4 ml-1 flex-shrink-0 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
+                                                                                        <svg className="w-4 h-4 ml-1 flex-shrink-0 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                                                                                     </div>
                                                                                     {/* 隱藏但可點選的原生 Select (下拉會顯示完整資訊與精確的防呆分類) */}
                                                                                     <select 
@@ -1277,18 +1295,21 @@
                                                                                             const quotaFull = [];
                                                                                             const others = [];
                                                                                             
-                                                                                            characters.forEach(c => {
+                                                                                            (characters || []).forEach(c => {
                                                                                                 // 【防呆】如果這個角色已經在這個隊伍的其他格子裡，就直接隱藏不讓他重複選
-                                                                                                if (group.members.includes(c.id) && c.id !== memberId) return;
+                                                                                                if (safeMembers.includes(c.id) && c.id !== memberId) return;
 
-                                                                                                const cAvail = availability[c.id];
-                                                                                                const isDayChecked = cAvail && cAvail.days[group.dayIndex];
-                                                                                                const isBossChecked = cAvail && cAvail.bosses && cAvail.bosses.includes(group.bossId);
+                                                                                                const cAvail = (availability || {})[c.id] || {};
+                                                                                                const safeCDays = cAvail.days || [];
+                                                                                                const isDayChecked = safeCDays[group.dayIndex];
+                                                                                                const safeCBosses = cAvail.bosses || [];
+                                                                                                const isBossChecked = safeCBosses.includes(group.bossId);
                                                                                                 
                                                                                                 let remainingCount = 0;
                                                                                                 if (isBossChecked) {
-                                                                                                    const totalCount = parseInt(cAvail.bossCounts?.[group.bossId]) || 1;
-                                                                                                    const assignedCount = groups.filter(grp => grp.bossId === group.bossId && (grp.members.includes(c.id) || grp.reserves.includes(c.id))).length;
+                                                                                                    const safeCBossCounts = cAvail.bossCounts || {};
+                                                                                                    const totalCount = parseInt(safeCBossCounts[group.bossId]) || 1;
+                                                                                                    const assignedCount = (groups || []).filter(grp => grp.bossId === group.bossId && ((grp.members || []).includes(c.id) || (grp.reserves || []).includes(c.id))).length;
                                                                                                     let adjustedAssigned = assignedCount;
                                                                                                     // 【校正回歸】如果我們正在評估的這個選單格子本來就是選這個人，要把他自己的這個名額吐回去，才能正確計算如果維持不變是否還有資格
                                                                                                     if (memberId === c.id) {
@@ -1369,7 +1390,7 @@
                                                     </table>
                                                 </div>
                                             </div>
-                                        ))}
+                                        )})}
                                     </div>
                                 </div>
                             );
@@ -1391,26 +1412,26 @@
                 const [newAccName, setNewAccName] = useState('');
                 
                 // 帳號編輯的暫存狀態
-                const [draftAccounts, setDraftAccounts] = useState(accounts);
+                const [draftAccounts, setDraftAccounts] = useState(accounts || []);
 
                 // 當雲端帳號有變動時，同步到暫存（首次載入或其他人修改時）
                 useEffect(() => {
-                    setDraftAccounts(accounts);
+                    setDraftAccounts(accounts || []);
                 }, [accounts]);
 
                 const updateDraft = (id, field, value) => {
-                    setDraftAccounts(draftAccounts.map(a => a.id === id ? { ...a, [field]: value } : a));
+                    setDraftAccounts((draftAccounts || []).map(a => a.id === id ? { ...a, [field]: value } : a));
                 };
 
                 const handleAddBoss = () => {
                     if(!newBossName || !newBossIcon) return;
-                    setBosses([...bosses, { id: 'b_' + Date.now(), name: newBossName, icon: newBossIcon, color: newBossColor }]);
+                    setBosses([...(bosses || []), { id: 'b_' + Date.now(), name: newBossName, icon: newBossIcon, color: newBossColor }]);
                     setNewBossName('');
                 };
 
                 const handleAddJobCat = () => {
                     if(!newJobCatName) return;
-                    setJobCategories([...jobCategories, { 
+                    setJobCategories([...(jobCategories || []), { 
                         id: 'jc_' + Date.now(), 
                         group: '自訂/其他', 
                         name: newJobCatName, 
@@ -1423,12 +1444,12 @@
 
                 const handleAddAccountDraft = () => {
                     if(!newAccName) return;
-                    setDraftAccounts([...draftAccounts, { id: 'a_' + Date.now(), playerName: newAccName, role: 'member', passcode: '1234' }]);
+                    setDraftAccounts([...(draftAccounts || []), { id: 'a_' + Date.now(), playerName: newAccName, role: 'member', passcode: '1234' }]);
                     setNewAccName('');
                 };
                 
                 const handleSaveAccounts = () => {
-                    const myAcc = draftAccounts.find(a => a.id === currentAccount.id);
+                    const myAcc = (draftAccounts || []).find(a => a.id === currentAccount.id);
                     if (!myAcc || myAcc.role !== 'admin') {
                         setAlertMessage('⚠️ 錯誤：您不能移除自己的帳號或取消自己的管理員權限！這樣會導致您無法管理系統。');
                         return;
@@ -1458,7 +1479,7 @@
                                 <button onClick={handleAddBoss} className="bg-red-600 text-white px-5 py-2 rounded font-bold hover:bg-red-700 h-[42px] shadow transition-colors">新增王團</button>
                             </div>
                             <div className="flex flex-wrap gap-3 mt-6">
-                                {bosses.map((boss, idx) => (
+                                {(bosses || []).map((boss, idx) => (
                                     <div key={boss.id} style={{ borderColor: boss.color, backgroundColor: darkMode ? '#374151' : boss.color + '10' }} className="border-2 px-3 py-2 rounded flex items-center space-x-2 shadow-sm">
                                         <span className="text-xl drop-shadow-sm">{boss.icon}</span>
                                         <span className="font-bold" style={{ color: boss.color }}>{boss.name}</span>
@@ -1483,7 +1504,7 @@
 
                                         <button 
                                             className="text-red-500 hover:text-red-700 font-black ml-1 opacity-50 hover:opacity-100 transition-opacity"
-                                            onClick={() => setBosses(bosses.filter(b => b.id !== boss.id))}
+                                            onClick={() => setBosses((bosses || []).filter(b => b.id !== boss.id))}
                                             title="刪除"
                                         >✕</button>
                                     </div>
@@ -1521,7 +1542,7 @@
                                                     <span className="font-bold">{jc.name}</span>
                                                     <button 
                                                         className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 font-black ml-1 opacity-60 hover:opacity-100 transition-opacity"
-                                                        onClick={() => setJobCategories(jobCategories.filter(j => j.id !== jc.id))}
+                                                        onClick={() => setJobCategories((jobCategories || []).filter(j => j.id !== jc.id))}
                                                         title="刪除"
                                                     >✕</button>
                                                 </div>
@@ -1577,7 +1598,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {draftAccounts.map(acc => (
+                                    {(draftAccounts || []).map(acc => (
                                         <tr key={acc.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b dark:border-gray-700 transition-colors text-gray-800 dark:text-gray-200">
                                             <td className="p-3 border dark:border-gray-700 font-medium">{acc.playerName}</td>
                                             <td className="p-3 border dark:border-gray-700">
@@ -1607,7 +1628,7 @@
                                                             setAlertMessage('⚠️ 您不能移除自己的帳號！');
                                                             return;
                                                         }
-                                                        setDraftAccounts(draftAccounts.filter(a => a.id !== acc.id));
+                                                        setDraftAccounts((draftAccounts || []).filter(a => a.id !== acc.id));
                                                     }}
                                                  >移除(未儲存)</button>
                                             </td>
@@ -1662,7 +1683,7 @@
                                     </div>
                                 </div>
                                 <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center font-bold text-blue-600 dark:text-blue-400 border-2 border-blue-300 dark:border-blue-700">
-                                    {currentAccount.playerName.charAt(0)}
+                                    {(currentAccount?.playerName || 'U').charAt(0)}
                                 </div>
                             </div>
                         </div>
@@ -1809,7 +1830,7 @@
                                 <div className="flex justify-end space-x-3">
                                     <button onClick={() => setGroupToDelete(null)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                     <button onClick={() => {
-                                        setGroups(groups.filter(g => g.id !== groupToDelete));
+                                        setGroups((groups || []).filter(g => g.id !== groupToDelete));
                                         setGroupToDelete(null);
                                     }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
                                 </div>
@@ -1840,7 +1861,7 @@
                                 <div className="flex justify-end space-x-3">
                                     <button onClick={() => setAccountToDelete(null)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                     <button onClick={() => {
-                                        setAccounts(accounts.filter(a => a.id !== accountToDelete));
+                                        setAccounts((accounts || []).filter(a => a.id !== accountToDelete));
                                         setAccountToDelete(null);
                                     }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
                                 </div>
@@ -1858,7 +1879,7 @@
                                     <button onClick={() => setIsConfirmResetOpen(false)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                     <button onClick={() => {
                                         const newAvail = {};
-                                        characters.forEach(c => {
+                                        (characters || []).forEach(c => {
                                             newAvail[c.id] = { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
                                         });
                                         setAvailability(newAvail); // 自動同步至雲端
