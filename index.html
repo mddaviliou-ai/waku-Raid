@@ -306,6 +306,11 @@
                 const [selectedAcc, setSelectedAcc] = useState(accounts[0]?.id || '');
                 const [passcode, setPasscode] = useState('');
                 const [error, setError] = useState('');
+                
+                // 註冊相關狀態
+                const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+                const [regName, setRegName] = useState('');
+                const [regPasscode, setRegPasscode] = useState('');
 
                 const forceResetAccounts = () => {
                     if(window.confirm('這將會清除雲端舊帳號與舊名單，並載入最新乾淨的初始狀態，確定要執行嗎？')) {
@@ -328,6 +333,33 @@
                     }
                 };
 
+                const handleRegister = () => {
+                    if (!regName.trim()) {
+                        setError('請填寫 ID: DC名稱！');
+                        return;
+                    }
+                    if (accounts.some(a => a.playerName === regName.trim())) {
+                        setError('此名稱已被註冊！');
+                        return;
+                    }
+                    
+                    const newAccId = 'a_' + Date.now();
+                    const newAcc = {
+                        id: newAccId,
+                        playerName: regName.trim(),
+                        role: 'member',
+                        passcode: regPasscode.trim() || '1234'
+                    };
+                    
+                    setAccounts([...accounts, newAcc]);
+                    setIsRegisterOpen(false);
+                    setRegName('');
+                    setRegPasscode('');
+                    setSelectedAcc(newAccId);
+                    setPasscode('');
+                    setError('✅ 註冊成功！請直接輸入密碼登入 (預設為 1234)。');
+                };
+
                 return (
                     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 relative">
                         <div className="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full border-t-8 border-blue-500 z-10">
@@ -346,7 +378,44 @@
                                     <input type="password" placeholder="預設: 一般1234 / 管理admin" className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" value={passcode} onChange={e => setPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && doLogin()} />
                                 </div>
                                 <button onClick={doLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition-colors shadow-lg mt-2">登入系統</button>
+                                
+                                <div className="text-center mt-4 pt-4 border-t border-gray-100">
+                                    <span className="text-sm text-gray-500">還沒有帳號嗎？ </span>
+                                    <button onClick={() => { setError(''); setIsRegisterOpen(true); }} className="text-blue-600 font-bold hover:underline">立即註冊</button>
+                                </div>
                             </div>
+                        </div>
+                        
+                        {/* 註冊 Modal */}
+                        {isRegisterOpen && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+                                <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-green-500">
+                                    <h2 className="text-2xl font-black mb-4 flex items-center text-gray-800">
+                                        <span className="text-green-500 mr-2">📝</span> 註冊新帳號
+                                    </h2>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-1">ID: DC名稱 (必填)</label>
+                                            <input type="text" className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-green-500" placeholder="輸入您的 Discord 名稱" value={regName} onChange={e => setRegName(e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-1">自訂密碼 (選填)</label>
+                                            <input type="password" className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-green-500" placeholder="若不填，預設為 1234" value={regPasscode} onChange={e => setRegPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleRegister()} />
+                                        </div>
+                                    </div>
+                                    <div className="mt-6 flex justify-end space-x-3">
+                                        <button onClick={() => setIsRegisterOpen(false)} className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded font-bold transition-colors">取消</button>
+                                        <button onClick={handleRegister} className="px-5 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow transition-colors">確認註冊</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div className="mt-8 text-center">
+                            <button onClick={forceResetAccounts} className="text-xs text-gray-400 hover:text-gray-600 underline">
+                                🔄 載入最新預設帳號 (清除雲端舊帳號)
+                            </button>
+                            <p className="text-[10px] text-gray-400 mt-1">※ 若下拉選單仍為舊名字，請點擊此按鈕進行強制更新</p>
                         </div>
                     </div>
                 );
@@ -929,7 +998,7 @@
                                                                                         const cWarn = cConflict ? `(⚠️已排: ${cConflict})` : '';
                                                                                         return (
                                                                                             <option key={c.id} value={c.id}>
-                                                                                                {c.name} {cWarn}
+                                                                                                [{c.job}] {c.name} (Lv.{c.level}) {cWarn}
                                                                                             </option>
                                                                                         )
                                                                                     })}
