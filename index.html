@@ -348,7 +348,9 @@
             // 🔥 核心防呆：動態計算角色「實際有效」的每週最高可排團數
             const getEffectiveMaxRuns = (avail) => {
                 if (!avail) return 2;
-                const totalSelected = (avail.bosses || []).reduce((sum, bId) => sum + (parseInt((avail.bossCounts || {})[bId]) || 1), 0);
+                // 過濾掉已被系統刪除的王團，避免隱形幽靈場次佔用
+                const validBosses = (avail.bosses || []).filter(bId => bosses.some(b => b.id === bId));
+                const totalSelected = validBosses.reduce((sum, bId) => sum + (parseInt((avail.bossCounts || {})[bId]) || 1), 0);
                 if (totalSelected === 0) return 2; 
                 return Math.min(avail.maxWeeklyRuns || 2, totalSelected);
             };
@@ -438,14 +440,6 @@
             // ==========================================
 
             const renderLoginScreen = () => {
-                const forceResetAccounts = () => {
-                    setAccounts(initialAccounts);
-                    setCharacters(initialCharacters);
-                    setAvailability(initialAvailability);
-                    setGroups(initialGroups);
-                    setLoginError('✅ 系統已重置為最新乾淨狀態！請重新登入。');
-                };
-
                 const doLogin = () => {
                     const acc = (accounts || []).find(a => (a.playerName || '').toLowerCase() === (loginName || '').trim().toLowerCase());
                     if (!acc) {
@@ -538,6 +532,9 @@
                 );
             };
 
+            // ==========================================
+            // 🚨 核心防護：未登入時阻擋渲染後續元件
+            // ==========================================
             if (!currentAccount) {
                 return (
                     <React.Fragment>
@@ -745,8 +742,8 @@
                         {myCharacters.map((char) => {
                             const charAvail = getAvail(char.id);
                             
-                            // Calculate dynamically the sum of all checked bosses' counts
-                            const totalSelectedRuns = (charAvail.bosses || []).reduce((sum, bId) => sum + (parseInt((charAvail.bossCounts || {})[bId]) || 1), 0);
+                            const validSelectedBosses = (charAvail.bosses || []).filter(bId => bosses.some(b => b.id === bId));
+                            const totalSelectedRuns = validSelectedBosses.reduce((sum, bId) => sum + (parseInt((charAvail.bossCounts || {})[bId]) || 1), 0);
                             const allowedMaxRuns = Math.max(1, Math.min(2, totalSelectedRuns));
                             const currentDisplayMaxRuns = Math.min(charAvail.maxWeeklyRuns || 2, allowedMaxRuns);
 
@@ -775,7 +772,7 @@
 
                                     {/* 王團與場次選擇 */}
                                     <div className="mb-6 bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-100 dark:border-orange-800/30">
-                                        <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週突襲王與場數 (可複選)：</h3>
+                                        <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週想打的王與場次數 (可複選)：</h3>
                                         <div className="flex flex-wrap gap-4">
                                             {(bosses || []).map(boss => {
                                                 const isChecked = (charAvail.bosses || []).includes(boss.id);
@@ -794,7 +791,6 @@
                                                         {isChecked && (
                                                             <div className="flex items-center border-l pl-2 border-gray-200 dark:border-gray-600">
                                                                 <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">場次:</span>
-                                                                {/* 修改：強制最高上限2 */}
                                                                 <input 
                                                                     type="number" 
                                                                     min="1" 
