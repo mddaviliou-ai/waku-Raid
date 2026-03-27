@@ -142,7 +142,7 @@
             const currentAccount = (accounts || []).find(a => a.id === loggedInId) || null;
             const [activeTab, setActiveTab] = useState('my-schedule');
 
-            // 各分頁子狀態 (提至最上層以保存狀態)
+            // 各分頁子狀態
             const [localAvail, setLocalAvail] = useState({});
             const [matrixSortMode, setMatrixSortMode] = useState('default');
             const [matrixBossTab, setMatrixBossTab] = useState('all');
@@ -158,14 +158,14 @@
             const [newJobCatText, setNewJobCatText] = useState('#1e3a8a');
             const [newAccName, setNewAccName] = useState('');
 
-            // 所有彈出 Modal 狀態
+            // 所有彈出 Modal 狀態 (包含所有關鍵變數)
             const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
             const [newGroup, setNewGroup] = useState({ bossId: '', name: '', dayIndex: 0, time: '' });
             const [isAddCharModalOpen, setIsAddCharModalOpen] = useState(false);
             const [newChar, setNewChar] = useState({ name: '', job: '', jobTypeId: '', level: 200 });
             const [editCharId, setEditCharId] = useState(null);
             
-            // 🐛 修復重點：補回負責刪除功能的狀態，消滅白畫面！
+            // 🔥 刪除功能的狀態 (絕不能漏掉)
             const [charToDelete, setCharToDelete] = useState(null);
             const [accountToDelete, setAccountToDelete] = useState(null);
             const [groupToDelete, setGroupToDelete] = useState(null);
@@ -173,7 +173,7 @@
             const [alertMessage, setAlertMessage] = useState('');
             const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false); 
             
-            // 登入畫面狀態
+            // 登入畫面與註冊狀態
             const [loginName, setLoginName] = useState('');
             const [passcode, setPasscode] = useState('');
             const [loginError, setLoginError] = useState('');
@@ -181,9 +181,6 @@
             const [isRegisterOpen, setIsRegisterOpen] = useState(false);
             const [regName, setRegName] = useState('');
             const [regPasscode, setRegPasscode] = useState('');
-            const [swordClicks, setSwordClicks] = useState(0);
-            const [isEasterEggModalOpen, setIsEasterEggModalOpen] = useState(false);
-            const [easterEggPwd, setEasterEggPwd] = useState('');
 
             // ==========================================
             // 2. 生命週期與 Effect Hooks
@@ -240,24 +237,6 @@
                 setDraftAccounts(accounts || []);
             }, [accounts]);
 
-            // 記憶密碼連動
-            useEffect(() => {
-                if (rememberMe) {
-                    const savedName = getLocal('waku-raid-saved-name');
-                    const savedPwd = getLocal('waku-raid-saved-pwd');
-                    if (savedName) setLoginName(savedName);
-                    if (savedPwd) setPasscode(savedPwd);
-                }
-            }, [rememberMe]);
-
-            // 彩蛋連擊重置計時器
-            useEffect(() => {
-                if (swordClicks > 0) {
-                    const timer = setTimeout(() => setSwordClicks(0), 600);
-                    return () => clearTimeout(timer);
-                }
-            }, [swordClicks]);
-
             // 日期計算與防當機 (提至最高層)
             const days = useMemo(() => {
                 const start = new Date(weekStartDate);
@@ -269,41 +248,6 @@
                     return `${d.getMonth()+1}/${d.getDate()} ${wdays[d.getDay()]}`;
                 });
             }, [weekStartDate]);
-
-            // 總表排序邏輯
-            const sortedCharacters = useMemo(() => {
-                let sorted = [...(characters || [])];
-                if (matrixSortMode === 'name') {
-                    sorted.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
-                } else if (matrixSortMode === 'job') {
-                    sorted.sort((a, b) => {
-                        const jcA = (jobCategories || []).find(j => j.id === a.jobTypeId);
-                        const jcB = (jobCategories || []).find(j => j.id === b.jobTypeId);
-                        const groupA = jcA ? (jcA.group || '其他') : '其他';
-                        const groupB = jcB ? (jcB.group || '其他') : '其他';
-                        const groupCompare = groupA.localeCompare(groupB, 'zh-TW');
-                        if (groupCompare !== 0) return groupCompare;
-                        return (a.job || '').localeCompare((b.job || ''), 'zh-TW');
-                    });
-                } else if (matrixSortMode === 'levelDesc') {
-                    sorted.sort((a, b) => b.level - a.level);
-                } else if (matrixSortMode === 'levelAsc') {
-                    sorted.sort((a, b) => a.level - b.level);
-                }
-                return sorted; 
-            }, [characters, matrixSortMode, jobCategories]);
-
-            // 總表過濾邏輯
-            const displayCharacters = useMemo(() => {
-                return sortedCharacters.filter(char => {
-                    const avail = (availability || {})[char.id] || {};
-                    if (!avail.days || !avail.days.some(d => d)) return false;
-                    if (matrixBossTab !== 'all') {
-                        if (!avail.bosses || !avail.bosses.includes(matrixBossTab)) return false;
-                    }
-                    return true;
-                });
-            }, [sortedCharacters, availability, matrixBossTab]);
 
             // ==========================================
             // 3. 共用運算與資料更新函式
@@ -357,7 +301,13 @@
                 const defaultBossName = bosses && bosses[0] ? bosses[0].name : '';
                 const bossGroupsCount = (groups || []).filter(g => g.bossId === defaultBossId).length;
                 const defaultGroupName = defaultBossId ? `${bossGroupsCount + 1}.${defaultBossName}` : '';
-                setNewGroup({ bossId: defaultBossId, name: defaultGroupName, dayIndex: dayIdx, time: '21:30~22:00集合' });
+
+                setNewGroup({ 
+                    bossId: defaultBossId, 
+                    name: defaultGroupName, 
+                    dayIndex: dayIdx, 
+                    time: '21:30~22:00集合' 
+                });
                 setIsCreateModalOpen(true);
             };
 
@@ -424,14 +374,6 @@
             // ==========================================
 
             const renderLoginScreen = () => {
-                const forceResetAccounts = () => {
-                    setAccounts(initialAccounts);
-                    setCharacters(initialCharacters);
-                    setAvailability(initialAvailability);
-                    setGroups(initialGroups);
-                    setLoginError('✅ 系統已重置為最新乾淨狀態！請重新登入。');
-                };
-
                 const doLogin = () => {
                     const acc = (accounts || []).find(a => (a.playerName || '').toLowerCase() === (loginName || '').trim().toLowerCase());
                     if (!acc) {
@@ -490,11 +432,7 @@
                         <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl max-w-sm w-full border-t-8 border-blue-500 z-10 transition-colors">
                             <div className="flex justify-between items-center mb-6">
                                 <h1 className="text-2xl font-black text-gray-800 dark:text-gray-100 flex items-center">
-                                    <span onClick={() => {
-                                        const newCount = swordClicks + 1;
-                                        setSwordClicks(newCount);
-                                        if (newCount >= 3) { setIsEasterEggModalOpen(true); setSwordClicks(0); }
-                                    }} className="text-blue-500 mr-2 cursor-pointer select-none" title=" ">⚔️</span> 
+                                    <span className="text-blue-500 mr-2 cursor-pointer select-none">⚔️</span> 
                                     Waku突襲登入
                                 </h1>
                                 <button onClick={() => setDarkMode(!darkMode)} className="text-xl p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="切換深色模式">
@@ -532,7 +470,54 @@
             // 🚨 核心防護：未登入時阻擋渲染後續元件
             // ==========================================
             if (!currentAccount) {
-                return renderLoginScreen();
+                return (
+                    <React.Fragment>
+                        {renderLoginScreen()}
+                        
+                        {/* 註冊 Modal (移到根節點確保絕對不會被遮擋或找不到變數) */}
+                        {isRegisterOpen && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center px-4" style={{ zIndex: 9999 }}>
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-green-500 transition-colors">
+                                    <h2 className="text-2xl font-black mb-4 flex items-center text-gray-800 dark:text-gray-100">
+                                        <span className="text-green-500 mr-2">📝</span> 註冊新帳號
+                                    </h2>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">ID: DC名稱 (必填)</label>
+                                            <input type="text" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-green-500" placeholder="輸入您的 Discord 名稱" value={regName} onChange={e => setRegName(e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">自訂密碼 (選填)</label>
+                                            <input type="password" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-green-500" placeholder="限英數字4~8碼，不填預設為1234" value={regPasscode} onChange={e => setRegPasscode(e.target.value)} />
+                                        </div>
+                                    </div>
+                                    <div className="mt-6 flex justify-end space-x-3">
+                                        <button onClick={() => setIsRegisterOpen(false)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
+                                        <button onClick={() => {
+                                            // 註冊邏輯
+                                            const cleanRegName = (regName || '').trim();
+                                            if (!cleanRegName) { setLoginError('請填寫 ID: DC名稱！'); return; }
+                                            if ((accounts || []).some(a => (a.playerName || '').toLowerCase() === cleanRegName.toLowerCase())) { setLoginError('此名稱已被註冊！'); return; }
+                                            let finalPasscode = (regPasscode || '').trim();
+                                            if (finalPasscode !== '') {
+                                                if (!/^[a-zA-Z0-9]{4,8}$/.test(finalPasscode)) { setLoginError('密碼格式錯誤！只能使用英文與數字，且長度需為 4 到 8 碼。'); return; }
+                                            } else { finalPasscode = '1234'; }
+                                            const newAccId = 'a_' + Date.now();
+                                            const newAcc = { id: newAccId, playerName: cleanRegName, role: 'member', passcode: finalPasscode };
+                                            setAccounts([...(accounts || []), newAcc]);
+                                            setIsRegisterOpen(false);
+                                            setRegName('');
+                                            setRegPasscode('');
+                                            setLoginName(newAcc.playerName);
+                                            setPasscode(finalPasscode); 
+                                            setLoginError('✅ 註冊成功！已為您帶入帳號密碼，請直接點擊登入。');
+                                        }} className="px-5 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow transition-colors">確認註冊</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </React.Fragment>
+                );
             }
 
             // --- 登入後的元件渲染 ---
@@ -642,6 +627,7 @@
                                         </div>
                                     </div>
 
+                                    {/* 王團與場次選擇 */}
                                     <div className="mb-6 bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-100 dark:border-orange-800/30">
                                         <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週想打的王與場次數 (可複選)：</h3>
                                         <div className="flex flex-wrap gap-4">
@@ -679,6 +665,7 @@
                                         </div>
                                     </div>
 
+                                    {/* 日期選擇 */}
                                     <div className="mb-4">
                                         <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-2">請勾選可出團的日期：</h3>
                                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
@@ -751,6 +738,34 @@
                     });
                     setGroups(newGroups);
                 };
+
+                let sortedCharacters = [...(characters || [])];
+                if (matrixSortMode === 'name') {
+                    sortedCharacters.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
+                } else if (matrixSortMode === 'job') {
+                    sortedCharacters.sort((a, b) => {
+                        const jcA = (jobCategories || []).find(j => j.id === a.jobTypeId);
+                        const jcB = (jobCategories || []).find(j => j.id === b.jobTypeId);
+                        const groupA = jcA ? (jcA.group || '其他') : '其他';
+                        const groupB = jcB ? (jcB.group || '其他') : '其他';
+                        const groupCompare = groupA.localeCompare(groupB, 'zh-TW');
+                        if (groupCompare !== 0) return groupCompare;
+                        return (a.job || '').localeCompare((b.job || ''), 'zh-TW');
+                    });
+                } else if (matrixSortMode === 'levelDesc') {
+                    sortedCharacters.sort((a, b) => b.level - a.level);
+                } else if (matrixSortMode === 'levelAsc') {
+                    sortedCharacters.sort((a, b) => a.level - b.level);
+                }
+
+                const displayCharacters = sortedCharacters.filter(char => {
+                    const avail = (availability || {})[char.id] || {};
+                    if (!avail.days || !avail.days.some(d => d)) return false;
+                    if (matrixBossTab !== 'all') {
+                        if (!avail.bosses || !avail.bosses.includes(matrixBossTab)) return false;
+                    }
+                    return true;
+                });
 
                 return (
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow overflow-x-auto transition-colors">
@@ -853,7 +868,7 @@
                                                 <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">{(accounts || []).find(a => a.id === char.accountId)?.playerName}</span>
                                             </td>
                                             <td className="p-2 border dark:border-gray-700">
-                                                <span style={getJobStyle(char.jobTypeId)} className="px-2 py-1 rounded text-sm font-bold shadow-sm">{char.job}</span>
+                                                <span style={getJobStyle(char.jobTypeId)} className="px-2.5 py-1 rounded text-sm font-bold shadow-sm">{char.job}</span>
                                                 <div className="text-[11px] text-gray-500 dark:text-gray-400 font-bold mt-1 pl-1">Lv.{char.level}</div>
                                             </td>
                                             <td className="p-2 border dark:border-gray-700">
@@ -1429,7 +1444,7 @@
                             <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 dark:bg-gray-700/50 p-4 rounded border dark:border-gray-700">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">新玩家名稱</label>
-                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-48" placeholder="例: 瓜董(玩家)" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
+                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-48" placeholder="例: (玩家)" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
                                 </div>
                                 <button onClick={handleAddAccountDraft} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white px-5 py-2 rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-500 h-[42px] shadow transition-colors border dark:border-gray-500">➕ 新增玩家</button>
                             </div>
@@ -1517,6 +1532,32 @@
                                 <span className="text-2xl mr-2">⚔️</span> Waku突襲排團系統
                             </h1>
                             <div className="flex items-center space-x-3">
+                                
+                                {/* 🔔 小鈴鐺通知 */}
+                                {(() => {
+                                    const myCharIds = (characters || []).filter(c => c.accountId === currentAccount.id).map(c => c.id);
+                                    const myAssignedGroups = (groups || []).filter(g => 
+                                        (g.members || []).some(m => myCharIds.includes(m)) || 
+                                        (g.reserves || []).some(m => myCharIds.includes(m))
+                                    );
+                                    const count = myAssignedGroups.length;
+                                    const tooltipText = count > 0 
+                                        ? `您已被排入 ${count} 個王團：\n` + myAssignedGroups.map(g => `- ${g.name}`).join('\n')
+                                        : '您目前尚未被排入任何王團';
+
+                                    return (
+                                        <div className="relative mr-2 cursor-help" title={tooltipText}>
+                                            <span className="text-2xl drop-shadow-sm">🔔</span>
+                                            {count > 0 && (
+                                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white dark:border-gray-800 shadow-sm z-10">
+                                                    {count}
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* 切換深色模式按鈕 */}
                                 <button 
                                     onClick={() => setDarkMode(!darkMode)}
                                     className="mr-2 p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-yellow-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors focus:outline-none"
@@ -1734,8 +1775,8 @@
                                         (characters || []).forEach(c => {
                                             newAvail[c.id] = { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
                                         });
-                                        setAvailability(newAvail); // 自動同步至雲端
-                                        setGroups([]);             // 自動同步至雲端
+                                        setAvailability(newAvail); 
+                                        setGroups([]);             
                                         setIsConfirmResetOpen(false);
                                         setAlertMessage('已成功清空所有報名資料與排班名單！大家可以開始填寫新的一週了！');
                                     }} className="px-5 py-2 bg-yellow-600 text-white rounded font-bold hover:bg-yellow-700 shadow transition-colors">確認清空</button>
