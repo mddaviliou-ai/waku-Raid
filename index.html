@@ -62,6 +62,9 @@
           measurementId: "G-483JD2VM1B"
         };
 
+        // ⚠️【系統強制重置密碼】⚠️ (當系統崩潰或測試完要清空時，連點登入頁左上角的劍3下輸入此密碼)
+        const MASTER_RESET_PASSWORD = "ji3g4t86au3"; // <--- 您可以在這裡自訂您的專屬重置密碼
+
         try {
             const envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
             const finalConfig = myFirebaseConfig || envConfig;
@@ -175,7 +178,7 @@
             const [loginName, setLoginName] = useState('');
             const [passcode, setPasscode] = useState('');
             const [loginError, setLoginError] = useState('');
-            const [regError, setRegError] = useState(''); // 新增：專屬註冊錯誤狀態
+            const [regError, setRegError] = useState(''); 
             const [rememberMe, setRememberMe] = useState(() => getLocal('waku-raid-remember') === 'true');
             const [isRegisterOpen, setIsRegisterOpen] = useState(false);
             const [regName, setRegName] = useState('');
@@ -335,6 +338,7 @@
                     setAlertMessage('請選擇職業');
                     return;
                 }
+
                 if (editCharId) {
                     setCharacters((characters || []).map(c => c.id === editCharId ? { 
                         ...c, name: currentAccount.playerName, job: newChar.job, jobTypeId: newChar.jobTypeId, level: parseInt(newChar.level) 
@@ -344,16 +348,20 @@
                     setCharacters([...(characters || []), { 
                         id: newCharId, accountId: currentAccount.id, name: currentAccount.playerName, job: newChar.job, jobTypeId: newChar.jobTypeId, level: parseInt(newChar.level) 
                     }]);
-                    setAvailability({ ...(availability || {}), [newCharId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' } });
+                    
+                    setAvailability({
+                        ...(availability || {}),
+                        [newCharId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' }
+                    });
                 }
+                
                 setIsAddCharModalOpen(false);
                 setEditCharId(null);
             };
 
             const confirmDeleteChar = () => {
                 if (!charToDelete) return;
-                const newChars = (characters || []).filter(c => c.id !== charToDelete);
-                setCharacters(newChars);
+                setCharacters((characters || []).filter(c => c.id !== charToDelete));
                 const newGroups = (groups || []).map(g => ({
                     ...g,
                     members: (g.members || []).map(m => m === charToDelete ? '' : m),
@@ -478,8 +486,19 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                );
+            };
+
+            // ==========================================
+            // 🚨 核心防護：未登入時阻擋渲染後續元件
+            // ==========================================
+            if (!currentAccount) {
+                return (
+                    <React.Fragment>
+                        {renderLoginScreen()}
                         
-                        {/* 註冊 Modal (獨立於主架構外，確保渲染安全) */}
+                        {/* 註冊 Modal (移到根節點確保絕對不會被遮擋或找不到變數) */}
                         {isRegisterOpen && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center px-4" style={{ zIndex: 9999 }}>
                                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-green-500 transition-colors">
@@ -500,12 +519,30 @@
                                     </div>
                                     <div className="mt-6 flex justify-end space-x-3">
                                         <button onClick={() => { setIsRegisterOpen(false); setRegError(''); }} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
-                                        <button onClick={handleRegister} className="px-5 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow transition-colors">確認註冊</button>
+                                        <button onClick={() => {
+                                            // 註冊邏輯
+                                            const cleanRegName = (regName || '').trim();
+                                            if (!cleanRegName) { setRegError('請填寫 ID: DC名稱！'); return; }
+                                            if ((accounts || []).some(a => (a.playerName || '').toLowerCase() === cleanRegName.toLowerCase())) { setRegError('此名稱已被註冊！'); return; }
+                                            let finalPasscode = (regPasscode || '').trim();
+                                            if (finalPasscode !== '') {
+                                                if (!/^[a-zA-Z0-9]{4,8}$/.test(finalPasscode)) { setRegError('密碼格式錯誤！只能使用英文與數字，且長度需為 4 到 8 碼。'); return; }
+                                            } else { finalPasscode = '1234'; }
+                                            const newAccId = 'a_' + Date.now();
+                                            const newAcc = { id: newAccId, playerName: cleanRegName, role: 'guest', passcode: finalPasscode };
+                                            setAccounts([...(accounts || []), newAcc]);
+                                            setIsRegisterOpen(false);
+                                            setRegName('');
+                                            setRegPasscode('');
+                                            setLoginName(newAcc.playerName);
+                                            setPasscode(finalPasscode); 
+                                            setLoginError('✅ 註冊成功！您的帳號需等待管理員開通後方可報名。');
+                                        }} className="px-5 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow transition-colors">確認註冊</button>
                                     </div>
                                 </div>
                             </div>
                         )}
-
+                        
                         {/* 彩蛋：系統重置 Modal */}
                         {isEasterEggModalOpen && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center px-4" style={{ zIndex: 9999 }}>
@@ -519,8 +556,12 @@
                                         onChange={e => setEasterEggPwd(e.target.value)}
                                         onKeyDown={e => {
                                             if (e.key === 'Enter') {
-                                                if (easterEggPwd === "admin") {
-                                                    forceResetAccounts();
+                                                if (easterEggPwd === MASTER_RESET_PASSWORD) {
+                                                    setAccounts(initialAccounts);
+                                                    setCharacters(initialCharacters);
+                                                    setAvailability(initialAvailability);
+                                                    setGroups(initialGroups);
+                                                    setLoginError('✅ 系統已重置為最新乾淨狀態！請重新登入。');
                                                     setIsEasterEggModalOpen(false);
                                                     setEasterEggPwd('');
                                                 } else {
@@ -534,8 +575,12 @@
                                     <div className="flex justify-end space-x-3">
                                         <button onClick={() => { setIsEasterEggModalOpen(false); setEasterEggPwd(''); }} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                         <button onClick={() => {
-                                            if (easterEggPwd === "admin") {
-                                                forceResetAccounts();
+                                            if (easterEggPwd === MASTER_RESET_PASSWORD) {
+                                                setAccounts(initialAccounts);
+                                                setCharacters(initialCharacters);
+                                                setAvailability(initialAvailability);
+                                                setGroups(initialGroups);
+                                                setLoginError('✅ 系統已重置為最新乾淨狀態！請重新登入。');
                                                 setIsEasterEggModalOpen(false);
                                                 setEasterEggPwd('');
                                             } else {
@@ -548,15 +593,8 @@
                                 </div>
                             </div>
                         )}
-                    </div>
+                    </React.Fragment>
                 );
-            };
-
-            // ==========================================
-            // 🚨 核心防護：未登入時阻擋渲染後續元件
-            // ==========================================
-            if (!currentAccount) {
-                return renderLoginScreen();
             }
 
             // 🛡️ 新手隔離區：如果是未開通 (guest) 權限，直接攔截！
