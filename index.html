@@ -5,19 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Waku突襲報名系統</title>
     
+    <!-- 加入南瓜 LOGO 標籤 -->
     <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🎃</text></svg>'>
     
+    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- 設定 Tailwind 的深色模式策略為 'class' -->
     <script>
         tailwind.config = {
             darkMode: 'class',
         }
     </script>
     
+    <!-- 引入 React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     
+    <!-- 引入 Babel 讓瀏覽器可以編譯 JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
@@ -340,6 +345,14 @@
                 };
             };
 
+            // 🔥 核心防呆：動態計算角色「實際有效」的每週最高可排團數
+            const getEffectiveMaxRuns = (avail) => {
+                if (!avail) return 2;
+                const totalSelected = (avail.bosses || []).reduce((sum, bId) => sum + (parseInt((avail.bossCounts || {})[bId]) || 1), 0);
+                if (totalSelected === 0) return 2; 
+                return Math.min(avail.maxWeeklyRuns || 2, totalSelected);
+            };
+
             // --- Modal 控制與執行邏輯 ---
             
             const handleOpenCreateModal = (dayIdx = 0) => {
@@ -392,7 +405,7 @@
                     
                     setAvailability({
                         ...(availability || {}),
-                        [newCharId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' }
+                        [newCharId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '', maxWeeklyRuns: 2 }
                     });
                 }
                 
@@ -457,7 +470,7 @@
                 };
 
                 const handleRegister = () => {
-                    setRegError(''); // 點擊前清空錯誤
+                    setRegError(''); 
                     const cleanRegName = (regName || '').trim();
                     if (!cleanRegName) {
                         setRegError('請填寫 ID: DC名稱！');
@@ -525,9 +538,6 @@
                 );
             };
 
-            // ==========================================
-            // 🚨 核心防護：未登入時阻擋渲染後續元件
-            // ==========================================
             if (!currentAccount) {
                 return (
                     <React.Fragment>
@@ -657,7 +667,7 @@
                 
                 const getAvail = (charId) => {
                     const base = localAvail[charId] || (availability || {})[charId] || {};
-                    return { days: base.days || Array(7).fill(false), bosses: base.bosses || [], bossCounts: base.bossCounts || {}, note: base.note || '' };
+                    return { days: base.days || Array(7).fill(false), bosses: base.bosses || [], bossCounts: base.bossCounts || {}, note: base.note || '', maxWeeklyRuns: base.maxWeeklyRuns || 2 };
                 };
 
                 const toggleDay = (charId, index) => {
@@ -734,6 +744,12 @@
 
                         {myCharacters.map((char) => {
                             const charAvail = getAvail(char.id);
+                            
+                            // Calculate dynamically the sum of all checked bosses' counts
+                            const totalSelectedRuns = (charAvail.bosses || []).reduce((sum, bId) => sum + (parseInt((charAvail.bossCounts || {})[bId]) || 1), 0);
+                            const allowedMaxRuns = Math.max(1, Math.min(2, totalSelectedRuns));
+                            const currentDisplayMaxRuns = Math.min(charAvail.maxWeeklyRuns || 2, allowedMaxRuns);
+
                             return (
                                 <div key={char.id} className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-100 dark:border-gray-700 transition-colors">
                                     <div className="mb-4 flex justify-between items-center border-b dark:border-gray-700 pb-2">
@@ -759,7 +775,7 @@
 
                                     {/* 王團與場次選擇 */}
                                     <div className="mb-6 bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-100 dark:border-orange-800/30">
-                                        <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週Boss王團 (可複選)：</h3>
+                                        <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週想打的王與場次數 (可複選)：</h3>
                                         <div className="flex flex-wrap gap-4">
                                             {(bosses || []).map(boss => {
                                                 const isChecked = (charAvail.bosses || []).includes(boss.id);
@@ -777,7 +793,7 @@
                                                         </label>
                                                         {isChecked && (
                                                             <div className="flex items-center border-l pl-2 border-gray-200 dark:border-gray-600">
-                                                                <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">團次:</span>
+                                                                <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">場次:</span>
                                                                 {/* 修改：強制最高上限2 */}
                                                                 <input 
                                                                     type="number" 
@@ -798,6 +814,26 @@
                                                     </div>
                                                 )
                                             })}
+                                        </div>
+                                        <div className="mt-4 pt-3 border-t border-orange-200 dark:border-orange-800/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div className="text-sm font-bold text-orange-800 dark:text-orange-400">
+                                                此角色本週<span className="text-red-500 underline mx-1">總共</span>最多可出勤幾團？
+                                                <span className="text-xs text-orange-600 dark:text-orange-300 ml-1 font-normal block sm:inline">(若只打1團但勾選多個王，代表由管理員任挑1個排班)</span>
+                                            </div>
+                                            <select
+                                                className="p-1.5 border border-orange-300 rounded font-black text-orange-700 bg-orange-50 dark:bg-gray-700 dark:text-orange-300 dark:border-orange-600 focus:ring-2 focus:ring-orange-500 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                                value={currentDisplayMaxRuns}
+                                                disabled={allowedMaxRuns <= 1}
+                                                onChange={(e) => {
+                                                    setLocalAvail({
+                                                        ...localAvail,
+                                                        [char.id]: { ...charAvail, maxWeeklyRuns: parseInt(e.target.value) }
+                                                    });
+                                                }}
+                                            >
+                                                <option value={1}>最多 1 團</option>
+                                                {allowedMaxRuns >= 2 && <option value={2}>最多 2 團</option>}
+                                            </select>
                                         </div>
                                     </div>
 
@@ -826,7 +862,7 @@
                                             className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 p-2 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                             value={charAvail.note}
                                             onChange={(e) => updateNote(char.id, e)}
-                                            placeholder="備註 (例如：晚上9點後。  例如:困拉>炎魔>拉圖"
+                                            placeholder="時間備註 (例如：晚上9點後)"
                                         />
                                     </div>
                                 </div>
@@ -851,8 +887,12 @@
                         const inReserves = (g.reserves || []).includes(charId) ? 1 : 0;
                         return sum + inMembers + inReserves;
                     }, 0);
-                    if (totalWeeklyAssigned >= 2) {
-                        setAlertMessage('⚠️ 指派失敗！此角色一週內已經被排入 2 個隊伍了，達數量上限。');
+                    
+                    const avail = (availability || {})[charId] || {};
+                    const maxRuns = getEffectiveMaxRuns(avail);
+                    
+                    if (totalWeeklyAssigned >= maxRuns) {
+                        setAlertMessage(`⚠️ 指派失敗！此角色本週已達 ${maxRuns} 團出勤上限。`);
                         return;
                     }
 
@@ -1054,7 +1094,14 @@
                                                     })}
                                                 </div>
                                             </td>
-                                            <td className="p-2 border dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs whitespace-normal min-w-[120px]">{avail.note || ''}</td>
+                                            <td className="p-2 border dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs whitespace-normal min-w-[120px]">
+                                                <div className="mb-1">
+                                                    <span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/30 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800 inline-block shadow-sm">
+                                                        {getEffectiveMaxRuns(avail)}團
+                                                    </span>
+                                                </div>
+                                                {avail.note || ''}
+                                            </td>
                                             {safeDays.map((isAvail, dayIndex) => {
                                                 const charGroupsOnDay = (groups || []).filter(g => g.dayIndex === dayIndex && ((g.members || []).includes(char.id) || (g.reserves || []).includes(char.id)));
                                                 
@@ -1121,11 +1168,12 @@
                                                                             const assignedCount = (groups || []).filter(g => g.bossId === bId && ((g.members || []).includes(char.id) || (g.reserves || []).includes(char.id))).length;
                                                                             const remainingCount = Math.max(0, totalCount - assignedCount);
                                                                             
-                                                                            const isGray = remainingCount <= 0 || totalWeeklyAssigned >= 2;
+                                                                            const maxRuns = getEffectiveMaxRuns(avail);
+                                                                            const isGray = remainingCount <= 0 || totalWeeklyAssigned >= maxRuns;
 
                                                                             if (isGray) {
                                                                                 return (
-                                                                                    <span key={b.id} className="relative inline-flex items-center grayscale opacity-40" title={totalWeeklyAssigned >= 2 ? "本週已達 2 團上限" : "排班次數已滿"}>
+                                                                                    <span key={b.id} className="relative inline-flex items-center grayscale opacity-40" title={totalWeeklyAssigned >= maxRuns ? "已達本週出勤上限" : "排班次數已滿"}>
                                                                                         <span>{b.icon}</span>
                                                                                     </span>
                                                                                 );
@@ -1147,9 +1195,9 @@
                                                                 )}
 
                                                                 {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
-                                                                    totalWeeklyAssigned >= 2 ? (
-                                                                        <div className="w-full text-[10px] text-red-500 text-center mt-1 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded py-0.5 font-bold" title="此角色已達一週 2 團上限">
-                                                                            已達2團上限
+                                                                    totalWeeklyAssigned >= getEffectiveMaxRuns(avail) ? (
+                                                                        <div className="w-full text-[10px] text-red-500 text-center mt-1 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded py-0.5 font-bold" title="此角色已達本週出勤上限">
+                                                                            已達上限
                                                                         </div>
                                                                     ) : availableGroupsOnDay.length > 0 ? (
                                                                         <select
@@ -1225,8 +1273,11 @@
                         const currentGroup = (groups || []).find(g => g.id === groupId);
                         const isCurrentlyInSlot = currentGroup && currentGroup[slotType] && currentGroup[slotType][slotIndex] === charId;
                         
-                        if (!isCurrentlyInSlot && totalWeeklyAssigned >= 2) {
-                            setAlertMessage('⚠️ 指派失敗！此角色一週內已經被排入 2 個隊伍了，達數量上限。');
+                        const avail = (availability || {})[charId] || {};
+                        const maxRuns = getEffectiveMaxRuns(avail);
+                        
+                        if (!isCurrentlyInSlot && totalWeeklyAssigned >= maxRuns) {
+                            setAlertMessage(`⚠️ 指派失敗！此角色本週已達 ${maxRuns} 團出勤上限。`);
                             return;
                         }
                     }
@@ -1340,12 +1391,13 @@
                                                                         const inReserves = (g.reserves || []).includes(memberId) ? 1 : 0;
                                                                         return sum + inMembers + inReserves;
                                                                     }, 0);
-                                                                    if (totalWeeklyAssigned > 2) isOverWeeklyQuota = true;
+                                                                    const maxRuns = getEffectiveMaxRuns(cAvail);
+                                                                    if (totalWeeklyAssigned > maxRuns) isOverWeeklyQuota = true;
                                                                 }
                                                                 
                                                                 let warnArr = [];
                                                                 if (conflictNames.length > 0) warnArr.push(`衝堂: ${conflictNames.join(', ')}`);
-                                                                if (isOverWeeklyQuota) warnArr.push(`逾2團`);
+                                                                if (isOverWeeklyQuota) warnArr.push(`逾本週上限`);
                                                                 else if (isOverQuota) warnArr.push(`單王滿/未報`);
                                                                 if (isDuplicateInGroup) warnArr.push(`重複`);
                                                                 
@@ -1400,7 +1452,9 @@
                                                                                                 }, 0);
                                                                                                 let adjustedWeeklyAssigned = totalWeeklyAssigned;
                                                                                                 if (memberId === c.id) adjustedWeeklyAssigned -= 1;
-                                                                                                const remainingWeeklyQuota = Math.max(0, 2 - adjustedWeeklyAssigned);
+                                                                                                
+                                                                                                const maxRuns = getEffectiveMaxRuns(cAvail);
+                                                                                                const remainingWeeklyQuota = Math.max(0, maxRuns - adjustedWeeklyAssigned);
 
                                                                                                 let remainingBossQuota = 0;
                                                                                                 if (isBossChecked) {
@@ -1429,7 +1483,7 @@
                                                                                                 const cConflicts = getConflictGroupNames(c.id, group.id, group.dayIndex);
                                                                                                 let tags = [];
                                                                                                 if (cConflicts.length > 0) tags.push(`衝堂: ${cConflicts.join(', ')}`);
-                                                                                                if (type === 'weeklyFull') tags.push('一週滿2團');
+                                                                                                if (type === 'weeklyFull') tags.push('已達上限');
                                                                                                 else if (type === 'quotaFull') tags.push('單王滿');
                                                                                                 
                                                                                                 const cWarn = tags.length > 0 ? ` (⚠️ ${tags.join(', ')})` : '';
@@ -1453,7 +1507,7 @@
                                                                                                         </optgroup>
                                                                                                     )}
                                                                                                     {weeklyFullList.length > 0 && (
-                                                                                                        <optgroup label="⛔ 本週滿2團 (強制無法指派)">
+                                                                                                        <optgroup label="⛔ 本週已達上限 (強制無法指派)">
                                                                                                             {weeklyFullList.map(c => renderOpt(c, 'weeklyFull'))}
                                                                                                         </optgroup>
                                                                                                     )}
@@ -2088,7 +2142,7 @@
                                                 setGroups(newGroups);
                                                 setAvailability({
                                                     ...availability,
-                                                    [charId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' }
+                                                    [charId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '', maxWeeklyRuns: 2 }
                                                 });
                                                 setRegistrationToDelete(null);
                                                 setAlertMessage('✅ 已成功刪除該角色的報名！');
@@ -2113,7 +2167,7 @@
                                             setGroups(newGroups);
                                             setAvailability({
                                                 ...availability,
-                                                [charId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' }
+                                                [charId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '', maxWeeklyRuns: 2 }
                                             });
                                             setRegistrationToDelete(null);
                                             setAlertMessage('✅ 已成功刪除該角色的報名！');
@@ -2138,7 +2192,7 @@
                                     <button onClick={() => {
                                         const newAvail = {};
                                         (characters || []).forEach(c => {
-                                            newAvail[c.id] = { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
+                                            newAvail[c.id] = { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '', maxWeeklyRuns: 2 };
                                         });
                                         setAvailability(newAvail); 
                                         setGroups([]);             
