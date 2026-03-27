@@ -120,98 +120,19 @@
         const initialGroups = [];
 
         const App = () => {
-            // --- 深色模式管理 ---
-            const [darkMode, setDarkMode] = useState(() => {
-                const saved = getLocal('waku-raid-darkmode');
-                return saved === 'true';
-            });
-
-            useEffect(() => {
-                if (darkMode) {
-                    document.documentElement.classList.add('dark');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                }
-                setLocal('waku-raid-darkmode', darkMode);
-            }, [darkMode]);
-
-            // --- 雲端同步與授權機制 ---
+            // --- 扁平化集中管理所有狀態 ---
+            const [darkMode, setDarkMode] = useState(() => getLocal('waku-raid-darkmode') === 'true');
             const [user, setUser] = useState(null);
             
-            useEffect(() => {
-                if (!auth) return;
-                const initAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch(e) { console.error("認證失敗", e); }
-                };
-                initAuth();
-                const unsub = onAuthStateChanged(auth, setUser);
-                return () => unsub();
-            }, []);
-
-            const updateCloud = (key, val) => {
-                if (!user || !db) return;
-                setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main'), { [key]: val }, { merge: true });
-            };
-
             const [bosses, _setBosses] = useState(initialBosses);
-            const setBosses = (val) => { _setBosses(val || []); updateCloud('bosses', val || []); };
-
             const [jobCategories, _setJobCategories] = useState(initialJobCategories);
-            const setJobCategories = (val) => { _setJobCategories(val || []); updateCloud('jobCategories', val || []); };
-
             const [accounts, _setAccounts] = useState(initialAccounts);
-            const setAccounts = (val) => { _setAccounts(val || []); updateCloud('accounts', val || []); };
-
             const [characters, _setCharacters] = useState(initialCharacters);
-            const setCharacters = (val) => { _setCharacters(val || []); updateCloud('characters', val || []); };
-
             const [availability, _setAvailability] = useState(initialAvailability);
-            const setAvailability = (val) => { _setAvailability(val || {}); updateCloud('availability', val || {}); };
-
             const [groups, _setGroups] = useState(initialGroups);
-            const setGroups = (val) => { _setGroups(val || []); updateCloud('groups', val || []); };
-
             const [weekStartDate, _setWeekStartDate] = useState(new Date().toISOString().split('T')[0]); 
-            const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
 
-            useEffect(() => {
-                if (!user || !db) return;
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main');
-                const unsub = onSnapshot(docRef, (snap) => {
-                    if (snap.exists()) {
-                        const data = snap.data();
-                        _setBosses(data.bosses || initialBosses || []);
-                        _setJobCategories(data.jobCategories || initialJobCategories || []);
-                        _setAccounts(data.accounts || initialAccounts || []);
-                        _setCharacters(data.characters || initialCharacters || []);
-                        _setAvailability(data.availability || initialAvailability || {});
-                        _setGroups(data.groups || initialGroups || []);
-                        _setWeekStartDate(data.weekStartDate || new Date().toISOString().split('T')[0]);
-                    } else {
-                        setDoc(docRef, { bosses, jobCategories, accounts, characters, availability, groups, weekStartDate });
-                    }
-                }, (err) => console.error(err));
-                return () => unsub();
-            }, [user]);
-
-            const days = useMemo(() => {
-                const start = new Date(weekStartDate);
-                const wdays = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
-                return Array.from({length: 7}).map((_, i) => {
-                    const d = new Date(start);
-                    d.setDate(d.getDate() + i);
-                    if (isNaN(d.getTime())) return `日期錯誤`; 
-                    return `${d.getMonth()+1}/${d.getDate()} ${wdays[d.getDay()]}`;
-                });
-            }, [weekStartDate]);
-            
-            // --- 全域應用狀態 (將子元件的狀態提升，以解決重新渲染遺失問題) ---
+            // App UI 狀態
             const [loggedInId, setLoggedInId] = useState(() => getLocal('waku-raid-loggedInId') || null);
             const currentAccount = (accounts || []).find(a => a.id === loggedInId) || null;
             const [activeTab, setActiveTab] = useState('my-schedule');
@@ -255,15 +176,68 @@
             const [newChar, setNewChar] = useState({ name: '', job: '', jobTypeId: '', level: 200 });
             const [editCharId, setEditCharId] = useState(null);
             
-            // 🐛 修復：這兩個狀態之前漏掉了，導致畫面變白
             const [charToDelete, setCharToDelete] = useState(null);
             const [accountToDelete, setAccountToDelete] = useState(null);
-            
             const [alertMessage, setAlertMessage] = useState('');
             const [groupToDelete, setGroupToDelete] = useState(null);
             const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false); 
 
-            // --- 共用函式 ---
+            // --- Effect Hooks ---
+            useEffect(() => {
+                if (darkMode) document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+                setLocal('waku-raid-darkmode', darkMode);
+            }, [darkMode]);
+
+            useEffect(() => {
+                if (!auth) return;
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch(e) { console.error("認證失敗", e); }
+                };
+                initAuth();
+                const unsub = onAuthStateChanged(auth, setUser);
+                return () => unsub();
+            }, []);
+
+            const updateCloud = (key, val) => {
+                if (!user || !db) return;
+                setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main'), { [key]: val }, { merge: true });
+            };
+
+            const setBosses = (val) => { _setBosses(val || []); updateCloud('bosses', val || []); };
+            const setJobCategories = (val) => { _setJobCategories(val || []); updateCloud('jobCategories', val || []); };
+            const setAccounts = (val) => { _setAccounts(val || []); updateCloud('accounts', val || []); };
+            const setCharacters = (val) => { _setCharacters(val || []); updateCloud('characters', val || []); };
+            const setAvailability = (val) => { _setAvailability(val || {}); updateCloud('availability', val || {}); };
+            const setGroups = (val) => { _setGroups(val || []); updateCloud('groups', val || []); };
+            const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
+
+            useEffect(() => {
+                if (!user || !db) return;
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main');
+                const unsub = onSnapshot(docRef, (snap) => {
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        _setBosses(data.bosses || initialBosses || []);
+                        _setJobCategories(data.jobCategories || initialJobCategories || []);
+                        _setAccounts(data.accounts || initialAccounts || []);
+                        _setCharacters(data.characters || initialCharacters || []);
+                        _setAvailability(data.availability || initialAvailability || {});
+                        _setGroups(data.groups || initialGroups || []);
+                        _setWeekStartDate(data.weekStartDate || new Date().toISOString().split('T')[0]);
+                    } else {
+                        setDoc(docRef, { bosses, jobCategories, accounts, characters, availability, groups, weekStartDate });
+                    }
+                }, (err) => console.error(err));
+                return () => unsub();
+            }, [user]);
+
             useEffect(() => {
                 setDraftAccounts(accounts || []);
             }, [accounts]);
@@ -284,6 +258,30 @@
                 }
             }, [swordClicks]);
 
+            const days = useMemo(() => {
+                const start = new Date(weekStartDate);
+                const wdays = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+                return Array.from({length: 7}).map((_, i) => {
+                    const d = new Date(start);
+                    d.setDate(d.getDate() + i);
+                    if (isNaN(d.getTime())) return `日期錯誤`; 
+                    return `${d.getMonth()+1}/${d.getDate()} ${wdays[d.getDay()]}`;
+                });
+            }, [weekStartDate]);
+
+            // --- 共用函式與事件處理 ---
+
+            const handleLogin = (id) => {
+                setLoggedInId(id);
+                setLocal('waku-raid-loggedInId', id);
+                setActiveTab('my-schedule'); 
+            };
+
+            const handleLogout = () => {
+                setLoggedInId(null);
+                removeLocal('waku-raid-loggedInId');
+            };
+
             const getJobStyle = (typeId, isWhiteBg = false) => {
                 const jc = (jobCategories || []).find(j => j.id === typeId);
                 if (jc) {
@@ -301,6 +299,52 @@
                 };
             };
 
+            const handleOpenCreateModal = (dayIdx = 0) => {
+                const defaultBossId = bosses && bosses[0] ? bosses[0].id : '';
+                const defaultBossName = bosses && bosses[0] ? bosses[0].name : '';
+                const bossGroupsCount = (groups || []).filter(g => g.bossId === defaultBossId).length;
+                const defaultGroupName = defaultBossId ? `${bossGroupsCount + 1}.${defaultBossName}` : '';
+                setNewGroup({ bossId: defaultBossId, name: defaultGroupName, dayIndex: dayIdx, time: '21:30~22:00集合' });
+                setIsCreateModalOpen(true);
+            };
+
+            const handleAddGroup = () => {
+                if(!newGroup.name || !newGroup.time) {
+                    setAlertMessage('請填寫完整資訊');
+                    return;
+                }
+                setGroups([...(groups || []), {
+                    id: 'g' + Date.now(),
+                    bossId: newGroup.bossId,
+                    name: newGroup.name,
+                    dayIndex: parseInt(newGroup.dayIndex),
+                    time: newGroup.time,
+                    members: ['', '', '', '', '', ''],
+                    reserves: ['']
+                }]);
+                setIsCreateModalOpen(false);
+            };
+
+            const handleAddCharacter = () => {
+                if(!newChar.job || !newChar.jobTypeId) {
+                    setAlertMessage('請選擇職業');
+                    return;
+                }
+                if (editCharId) {
+                    setCharacters((characters || []).map(c => c.id === editCharId ? { 
+                        ...c, name: currentAccount.playerName, job: newChar.job, jobTypeId: newChar.jobTypeId, level: parseInt(newChar.level) 
+                    } : c));
+                } else {
+                    const newCharId = 'c_' + Date.now();
+                    setCharacters([...(characters || []), { 
+                        id: newCharId, accountId: currentAccount.id, name: currentAccount.playerName, job: newChar.job, jobTypeId: newChar.jobTypeId, level: parseInt(newChar.level) 
+                    }]);
+                    setAvailability({ ...(availability || {}), [newCharId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' } });
+                }
+                setIsAddCharModalOpen(false);
+                setEditCharId(null);
+            };
+
             const confirmDeleteChar = () => {
                 if (!charToDelete) return;
                 const newChars = (characters || []).filter(c => c.id !== charToDelete);
@@ -312,10 +356,17 @@
                 }));
                 setGroups(newGroups);
                 setCharToDelete(null);
-                setAlertMessage('✅ 角色已成功刪除！'); // 刪除後給予回饋
+                setAlertMessage('✅ 角色已成功刪除！');
             };
 
-            // --- 畫面渲染區塊 ---
+            const groupedJobs = (jobCategories || []).reduce((acc, jc) => {
+                const g = jc.group || '其他';
+                if (!acc[g]) acc[g] = [];
+                acc[g].push(jc);
+                return acc;
+            }, {});
+
+            // --- 畫面渲染區域 ---
 
             const renderLoginScreen = () => {
                 const forceResetAccounts = () => {
@@ -332,10 +383,7 @@
                         setLoginError('找不到此帳號，請確認名稱是否正確或前往註冊！');
                         return;
                     }
-                    const correctPasscode = (acc.passcode !== undefined && acc.passcode !== null) 
-                        ? String(acc.passcode) 
-                        : (acc.role === 'member' ? '1234' : 'admin');
-
+                    const correctPasscode = (acc.passcode !== undefined && acc.passcode !== null) ? String(acc.passcode) : (acc.role === 'member' ? '1234' : 'admin');
                     if (String(passcode) === correctPasscode) {
                         if (rememberMe) {
                             setLocal('waku-raid-remember', 'true');
@@ -403,32 +451,13 @@
                             <div className="space-y-5">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">輸入您的 ID (DC名稱)</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="請輸入註冊的名稱" 
-                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500 font-medium" 
-                                        value={loginName} 
-                                        onChange={e => setLoginName(e.target.value)} 
-                                        onKeyDown={e => e.key === 'Enter' && doLogin()}
-                                    />
+                                    <input type="text" placeholder="請輸入註冊的名稱" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500 font-medium" value={loginName} onChange={e => setLoginName(e.target.value)} onKeyDown={e => e.key === 'Enter' && doLogin()}/>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">輸入登入密碼</label>
-                                    <input 
-                                        type="password" 
-                                        placeholder="預設: 一般1234 " 
-                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500" 
-                                        value={passcode} 
-                                        onChange={e => setPasscode(e.target.value)} 
-                                        onKeyDown={e => e.key === 'Enter' && doLogin()} 
-                                    />
+                                    <input type="password" placeholder="預設: 一般1234 " className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-blue-500" value={passcode} onChange={e => setPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && doLogin()} />
                                     <label className="flex items-center space-x-2 mt-3 cursor-pointer">
-                                        <input 
-                                            type="checkbox" 
-                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" 
-                                            checked={rememberMe} 
-                                            onChange={e => setRememberMe(e.target.checked)} 
-                                        />
+                                        <input type="checkbox" className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} />
                                         <span className="text-sm font-bold text-gray-600 dark:text-gray-400">記住帳號密碼</span>
                                     </label>
                                 </div>
@@ -615,7 +644,6 @@
                                         </div>
                                     </div>
 
-                                    {/* 王團與場次選擇 */}
                                     <div className="mb-6 bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-100 dark:border-orange-800/30">
                                         <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週想打的王與場次數 (可複選)：</h3>
                                         <div className="flex flex-wrap gap-4">
@@ -653,7 +681,6 @@
                                         </div>
                                     </div>
 
-                                    {/* 日期選擇 */}
                                     <div className="mb-4">
                                         <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-2">請勾選可出團的日期：</h3>
                                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
@@ -694,7 +721,6 @@
                 );
             };
 
-            // --- 元件：報名總表 ---
             const renderAvailabilityMatrix = () => {
                 const assignCharToGroup = (charId, groupId) => {
                     if (!groupId) return;
@@ -1005,7 +1031,6 @@
                 );
             };
 
-            // --- 元件：排團管理 ---
             const renderRaidPlanner = () => {
                 const myCharIds = (characters || []).filter(c => c.accountId === currentAccount.id).map(c => c.id);
 
@@ -1274,7 +1299,6 @@
                 );
             };
 
-             // --- 元件：系統與權限管理 (僅管理員) ---
              const renderSystemManagement = () => {
                 const handleAddBoss = () => {
                     if(!newBossName || !newBossIcon) return;
@@ -1460,7 +1484,6 @@
                                                     value={acc.passcode !== undefined ? acc.passcode : ''} 
                                                     onChange={(e) => {
                                                         const val = e.target.value;
-                                                        // 限制只能輸入英文字母和數字，最多 8 碼
                                                         if (val === '' || /^[a-zA-Z0-9]{0,8}$/.test(val)) {
                                                             updateDraft(acc.id, 'passcode', val);
                                                         }
@@ -1566,11 +1589,13 @@
 
                     <main className="flex-grow max-w-7xl mx-auto px-4 w-full pb-10">
                         {activeTab === 'my-schedule' && renderMemberSchedule()}
-                        {activeTab === 'matrix' && <AvailabilityMatrix onOpenCreateModal={handleOpenCreateModal} />}
+                        {activeTab === 'matrix' && renderAvailabilityMatrix()}
                         {activeTab === 'planner' && renderRaidPlanner()}
                         {activeTab === 'system' && renderSystemManagement()}
                     </main>
 
+                    {/* 所有 Modal 都移到最外層統一管理，徹底解決層級問題 */}
+                    
                     {/* 新增/編輯角色 Modal */}
                     {isAddCharModalOpen && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center px-4" style={{ zIndex: 9999 }}>
