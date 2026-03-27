@@ -63,7 +63,7 @@
         };
 
         // ⚠️【系統強制重置密碼】⚠️ (當系統崩潰或測試完要清空時，連點登入頁左上角的劍3下輸入此密碼)
-        const MASTER_RESET_PASSWORD = "admin"; // <--- 您可以在這裡自訂您的專屬重置密碼
+        const MASTER_RESET_PASSWORD = "ji3g4t86au3"; // <--- 您可以在這裡自訂您的專屬重置密碼
 
         try {
             const envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -1712,7 +1712,7 @@
                                                             setAlertMessage('⚠️ 您不能移除自己的帳號！');
                                                             return;
                                                         }
-                                                        setDraftAccounts((draftAccounts || []).filter(a => a.id !== acc.id));
+                                                        setAccountToDelete(acc.id);
                                                     }}
                                                  >移除</button>
                                             </td>
@@ -1971,14 +1971,14 @@
                     {accountToDelete && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center px-4" style={{ zIndex: 9999 }}>
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500 transition-colors">
-                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600 dark:text-red-400">🚨 刪除帳號確認</h2>
-                                <p className="mb-6 text-gray-700 dark:text-gray-300">確定要刪除該玩家帳號嗎？<br/><span className="text-red-500 dark:text-red-400 font-bold">他將無法再登入系統。</span></p>
+                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600 dark:text-red-400">🚨 移除帳號確認</h2>
+                                <p className="mb-6 text-gray-700 dark:text-gray-300">確定要在本次變更中移除該玩家帳號嗎？<br/><span className="text-red-500 dark:text-red-400 font-bold">此操作需點擊「儲存帳號變更」才會生效。</span></p>
                                 <div className="flex justify-end space-x-3">
                                     <button onClick={() => setAccountToDelete(null)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                     <button onClick={() => {
-                                        setAccounts((accounts || []).filter(a => a.id !== accountToDelete));
+                                        setDraftAccounts((draftAccounts || []).filter(a => a.id !== accountToDelete));
                                         setAccountToDelete(null);
-                                    }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
+                                    }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認移除</button>
                                 </div>
                             </div>
                         </div>
