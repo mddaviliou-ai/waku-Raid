@@ -58,7 +58,7 @@
         };
 
         // ⚠️【系統強制重置密碼】⚠️ (當系統崩潰或測試完要清空時，連點登入頁左上角的劍3下輸入此密碼)
-        const MASTER_RESET_PASSWORD = "ji3g4t86au3"; // <--- 您可以在這裡自訂您的專屬重置密碼
+        const MASTER_RESET_PASSWORD = "admin"; // <--- 您可以在這裡自訂您的專屬重置密碼
 
         try {
             const envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -166,6 +166,8 @@
             const [charToDelete, setCharToDelete] = useState(null);
             const [accountToDelete, setAccountToDelete] = useState(null);
             const [groupToDelete, setGroupToDelete] = useState(null);
+            const [registrationToDelete, setRegistrationToDelete] = useState(null);
+            const [deletePromptInput, setDeletePromptInput] = useState('');
             
             const [alertMessage, setAlertMessage] = useState('');
             const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false); 
@@ -757,7 +759,7 @@
 
                                     {/* 王團與場次選擇 */}
                                     <div className="mb-6 bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-100 dark:border-orange-800/30">
-                                        <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週參加的突襲團 (可複選)：</h3>
+                                        <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週Boss王團 (可複選)：</h3>
                                         <div className="flex flex-wrap gap-4">
                                             {(bosses || []).map(boss => {
                                                 const isChecked = (charAvail.bosses || []).includes(boss.id);
@@ -1014,10 +1016,26 @@
                                     }, 0);
 
                                     return (
-                                        <tr key={char.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b dark:border-gray-700">
+                                        <tr key={char.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b dark:border-gray-700 transition-colors">
                                             <td className="p-2 border dark:border-gray-700 font-bold text-gray-800 dark:text-gray-200">
-                                                {char.name}<br/>
-                                                <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">{(accounts || []).find(a => a.id === char.accountId)?.playerName}</span>
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        {char.name}<br/>
+                                                        <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">{(accounts || []).find(a => a.id === char.accountId)?.playerName}</span>
+                                                    </div>
+                                                    {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
+                                                        <button 
+                                                            onClick={() => {
+                                                                setRegistrationToDelete(char.id);
+                                                                setDeletePromptInput('');
+                                                            }}
+                                                            className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400 opacity-50 hover:opacity-100 transition-opacity ml-1 px-1 text-sm"
+                                                            title="刪除此報名"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="p-2 border dark:border-gray-700">
                                                 <span style={getJobStyle(char.jobTypeId)} className="px-2.5 py-1 rounded text-sm font-bold shadow-sm">{char.job}</span>
@@ -2042,6 +2060,68 @@
                                         setDraftAccounts((draftAccounts || []).filter(a => a.id !== accountToDelete));
                                         setAccountToDelete(null);
                                     }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認移除</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 自訂 Confirm Modal (刪除單一報名) */}
+                    {registrationToDelete && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center px-4" style={{ zIndex: 9999 }}>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500 transition-colors">
+                                <h2 className="text-xl font-black mb-4 flex items-center text-red-600 dark:text-red-400">🚨 刪除報名確認</h2>
+                                <p className="mb-4 text-gray-700 dark:text-gray-300">確定要刪除該角色的報名嗎？<br/>要的話請輸入 <strong className="text-red-500">YES</strong>：</p>
+                                <input 
+                                    type="text" 
+                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-red-500 mb-6 font-bold uppercase" 
+                                    value={deletePromptInput} 
+                                    onChange={e => setDeletePromptInput(e.target.value.toUpperCase())}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                            if (deletePromptInput === 'YES') {
+                                                const charId = registrationToDelete;
+                                                const newGroups = (groups || []).map(g => ({
+                                                    ...g,
+                                                    members: (g.members || []).map(m => m === charId ? '' : m),
+                                                    reserves: (g.reserves || []).map(m => m === charId ? '' : m)
+                                                }));
+                                                setGroups(newGroups);
+                                                setAvailability({
+                                                    ...availability,
+                                                    [charId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' }
+                                                });
+                                                setRegistrationToDelete(null);
+                                                setAlertMessage('✅ 已成功刪除該角色的報名！');
+                                            } else {
+                                                setAlertMessage('❌ 刪除取消：輸入不正確');
+                                                setRegistrationToDelete(null);
+                                            }
+                                        }
+                                    }}
+                                    placeholder="請輸入 YES"
+                                />
+                                <div className="flex justify-end space-x-3">
+                                    <button onClick={() => setRegistrationToDelete(null)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
+                                    <button onClick={() => {
+                                        if (deletePromptInput === 'YES') {
+                                            const charId = registrationToDelete;
+                                            const newGroups = (groups || []).map(g => ({
+                                                ...g,
+                                                members: (g.members || []).map(m => m === charId ? '' : m),
+                                                reserves: (g.reserves || []).map(m => m === charId ? '' : m)
+                                            }));
+                                            setGroups(newGroups);
+                                            setAvailability({
+                                                ...availability,
+                                                [charId]: { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' }
+                                            });
+                                            setRegistrationToDelete(null);
+                                            setAlertMessage('✅ 已成功刪除該角色的報名！');
+                                        } else {
+                                            setAlertMessage('❌ 刪除取消：輸入不正確');
+                                            setRegistrationToDelete(null);
+                                        }
+                                    }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認刪除</button>
                                 </div>
                             </div>
                         </div>
