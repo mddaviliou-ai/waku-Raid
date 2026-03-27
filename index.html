@@ -43,7 +43,7 @@
 
         const { useState, useEffect, useMemo } = React;
 
-        // 安全的 LocalStorage 存取
+        // 安全的 LocalStorage 存取 (防止 Iframe 阻擋導致白畫面)
         const getLocal = (key) => { try { return localStorage.getItem(key); } catch(e) { return null; } };
         const setLocal = (key, val) => { try { localStorage.setItem(key, val); } catch(e) {} };
         const removeLocal = (key) => { try { localStorage.removeItem(key); } catch(e) {} };
@@ -120,10 +120,15 @@
         const initialGroups = [];
 
         const App = () => {
-            // --- 扁平化集中管理所有狀態 ---
-            const [darkMode, setDarkMode] = useState(() => getLocal('waku-raid-darkmode') === 'true');
-            const [user, setUser] = useState(null);
+            // ==========================================
+            // 1. 扁平化集中管理所有全域狀態 (防止元件卸載遺失)
+            // ==========================================
             
+            // 深色模式狀態
+            const [darkMode, setDarkMode] = useState(() => getLocal('waku-raid-darkmode') === 'true');
+            
+            // Firebase 資料狀態
+            const [user, setUser] = useState(null);
             const [bosses, _setBosses] = useState(initialBosses);
             const [jobCategories, _setJobCategories] = useState(initialJobCategories);
             const [accounts, _setAccounts] = useState(initialAccounts);
@@ -132,11 +137,39 @@
             const [groups, _setGroups] = useState(initialGroups);
             const [weekStartDate, _setWeekStartDate] = useState(new Date().toISOString().split('T')[0]); 
 
-            // App UI 狀態
+            // App UI 導覽狀態
             const [loggedInId, setLoggedInId] = useState(() => getLocal('waku-raid-loggedInId') || null);
             const currentAccount = (accounts || []).find(a => a.id === loggedInId) || null;
             const [activeTab, setActiveTab] = useState('my-schedule');
 
+            // 各分頁子狀態 (提至最上層以保存狀態)
+            const [localAvail, setLocalAvail] = useState({});
+            const [matrixSortMode, setMatrixSortMode] = useState('default');
+            const [matrixBossTab, setMatrixBossTab] = useState('all');
+            const [raidFilterMode, setRaidFilterMode] = useState('all');
+            const [draftAccounts, setDraftAccounts] = useState([]);
+
+            // 系統管理表單狀態
+            const [newBossName, setNewBossName] = useState('');
+            const [newBossIcon, setNewBossIcon] = useState('🔥');
+            const [newBossColor, setNewBossColor] = useState('#ef4444');
+            const [newJobCatName, setNewJobCatName] = useState('');
+            const [newJobCatBg, setNewJobCatBg] = useState('#dbeafe');
+            const [newJobCatText, setNewJobCatText] = useState('#1e3a8a');
+            const [newAccName, setNewAccName] = useState('');
+
+            // 所有彈出 Modal 狀態
+            const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+            const [newGroup, setNewGroup] = useState({ bossId: '', name: '', dayIndex: 0, time: '' });
+            const [isAddCharModalOpen, setIsAddCharModalOpen] = useState(false);
+            const [newChar, setNewChar] = useState({ name: '', job: '', jobTypeId: '', level: 200 });
+            const [editCharId, setEditCharId] = useState(null);
+            const [charToDelete, setCharToDelete] = useState(null);
+            const [accountToDelete, setAccountToDelete] = useState(null);
+            const [alertMessage, setAlertMessage] = useState('');
+            const [groupToDelete, setGroupToDelete] = useState(null);
+            const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false); 
+            
             // 登入畫面狀態
             const [loginName, setLoginName] = useState('');
             const [passcode, setPasscode] = useState('');
@@ -149,46 +182,18 @@
             const [isEasterEggModalOpen, setIsEasterEggModalOpen] = useState(false);
             const [easterEggPwd, setEasterEggPwd] = useState('');
 
-            // 成員報名表狀態
-            const [localAvail, setLocalAvail] = useState({});
+            // ==========================================
+            // 2. 生命週期與 Effect Hooks
+            // ==========================================
 
-            // 報名總表狀態
-            const [matrixSortMode, setMatrixSortMode] = useState('default');
-            const [matrixBossTab, setMatrixBossTab] = useState('all');
-
-            // 編輯突襲團狀態
-            const [raidFilterMode, setRaidFilterMode] = useState('all');
-
-            // 系統管理狀態
-            const [newBossName, setNewBossName] = useState('');
-            const [newBossIcon, setNewBossIcon] = useState('🔥');
-            const [newBossColor, setNewBossColor] = useState('#ef4444');
-            const [newJobCatName, setNewJobCatName] = useState('');
-            const [newJobCatBg, setNewJobCatBg] = useState('#dbeafe');
-            const [newJobCatText, setNewJobCatText] = useState('#1e3a8a');
-            const [newAccName, setNewAccName] = useState('');
-            const [draftAccounts, setDraftAccounts] = useState(accounts || []);
-
-            // Modal 及 警告狀態
-            const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-            const [newGroup, setNewGroup] = useState({ bossId: '', name: '', dayIndex: 0, time: '' });
-            const [isAddCharModalOpen, setIsAddCharModalOpen] = useState(false);
-            const [newChar, setNewChar] = useState({ name: '', job: '', jobTypeId: '', level: 200 });
-            const [editCharId, setEditCharId] = useState(null);
-            
-            const [charToDelete, setCharToDelete] = useState(null);
-            const [accountToDelete, setAccountToDelete] = useState(null);
-            const [alertMessage, setAlertMessage] = useState('');
-            const [groupToDelete, setGroupToDelete] = useState(null);
-            const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false); 
-
-            // --- Effect Hooks ---
+            // 深色模式連動
             useEffect(() => {
                 if (darkMode) document.documentElement.classList.add('dark');
                 else document.documentElement.classList.remove('dark');
                 setLocal('waku-raid-darkmode', darkMode);
             }, [darkMode]);
 
+            // Firebase 認證
             useEffect(() => {
                 if (!auth) return;
                 const initAuth = async () => {
@@ -205,19 +210,7 @@
                 return () => unsub();
             }, []);
 
-            const updateCloud = (key, val) => {
-                if (!user || !db) return;
-                setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main'), { [key]: val }, { merge: true });
-            };
-
-            const setBosses = (val) => { _setBosses(val || []); updateCloud('bosses', val || []); };
-            const setJobCategories = (val) => { _setJobCategories(val || []); updateCloud('jobCategories', val || []); };
-            const setAccounts = (val) => { _setAccounts(val || []); updateCloud('accounts', val || []); };
-            const setCharacters = (val) => { _setCharacters(val || []); updateCloud('characters', val || []); };
-            const setAvailability = (val) => { _setAvailability(val || {}); updateCloud('availability', val || {}); };
-            const setGroups = (val) => { _setGroups(val || []); updateCloud('groups', val || []); };
-            const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
-
+            // Firebase 資料同步讀取 (防空值白畫面保護)
             useEffect(() => {
                 if (!user || !db) return;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main');
@@ -232,16 +225,19 @@
                         _setGroups(data.groups || initialGroups || []);
                         _setWeekStartDate(data.weekStartDate || new Date().toISOString().split('T')[0]);
                     } else {
-                        setDoc(docRef, { bosses, jobCategories, accounts, characters, availability, groups, weekStartDate });
+                        // 初始化資料庫
+                        setDoc(docRef, { bosses: initialBosses, jobCategories: initialJobCategories, accounts: initialAccounts, characters: initialCharacters, availability: initialAvailability, groups: initialGroups, weekStartDate: new Date().toISOString().split('T')[0] });
                     }
                 }, (err) => console.error(err));
                 return () => unsub();
             }, [user]);
 
+            // 當系統帳號更新時，同步到系統管理的草稿區
             useEffect(() => {
                 setDraftAccounts(accounts || []);
             }, [accounts]);
 
+            // 記憶密碼連動
             useEffect(() => {
                 if (rememberMe) {
                     const savedName = getLocal('waku-raid-saved-name');
@@ -251,12 +247,30 @@
                 }
             }, [rememberMe]);
 
+            // 彩蛋連擊重置計時器
             useEffect(() => {
                 if (swordClicks > 0) {
                     const timer = setTimeout(() => setSwordClicks(0), 600);
                     return () => clearTimeout(timer);
                 }
             }, [swordClicks]);
+
+            // ==========================================
+            // 3. 共用運算與資料更新函式
+            // ==========================================
+
+            const updateCloud = (key, val) => {
+                if (!user || !db) return;
+                setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main'), { [key]: val }, { merge: true });
+            };
+
+            const setBosses = (val) => { _setBosses(val || []); updateCloud('bosses', val || []); };
+            const setJobCategories = (val) => { _setJobCategories(val || []); updateCloud('jobCategories', val || []); };
+            const setAccounts = (val) => { _setAccounts(val || []); updateCloud('accounts', val || []); };
+            const setCharacters = (val) => { _setCharacters(val || []); updateCloud('characters', val || []); };
+            const setAvailability = (val) => { _setAvailability(val || {}); updateCloud('availability', val || {}); };
+            const setGroups = (val) => { _setGroups(val || []); updateCloud('groups', val || []); };
+            const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
 
             const days = useMemo(() => {
                 const start = new Date(weekStartDate);
@@ -268,8 +282,6 @@
                     return `${d.getMonth()+1}/${d.getDate()} ${wdays[d.getDay()]}`;
                 });
             }, [weekStartDate]);
-
-            // --- 共用函式與事件處理 ---
 
             const handleLogin = (id) => {
                 setLoggedInId(id);
@@ -299,6 +311,8 @@
                 };
             };
 
+            // --- Modal 控制與執行邏輯 ---
+            
             const handleOpenCreateModal = (dayIdx = 0) => {
                 const defaultBossId = bosses && bosses[0] ? bosses[0].id : '';
                 const defaultBossName = bosses && bosses[0] ? bosses[0].name : '';
@@ -366,7 +380,9 @@
                 return acc;
             }, {});
 
-            // --- 畫面渲染區域 ---
+            // ==========================================
+            // 4. 渲染各個頁面內容
+            // ==========================================
 
             const renderLoginScreen = () => {
                 const forceResetAccounts = () => {
@@ -470,7 +486,7 @@
                             </div>
                         </div>
                         
-                        {/* 註冊 Modal */}
+                        {/* 註冊 Modal (獨立於主架構外，確保渲染安全) */}
                         {isRegisterOpen && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center px-4" style={{ zIndex: 9999 }}>
                                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-green-500 transition-colors">
@@ -506,7 +522,7 @@
                                         onChange={e => setEasterEggPwd(e.target.value)}
                                         onKeyDown={e => {
                                             if (e.key === 'Enter') {
-                                                if (easterEggPwd === "admin1217") {
+                                                if (easterEggPwd === "admin") {
                                                     forceResetAccounts();
                                                     setIsEasterEggModalOpen(false);
                                                     setEasterEggPwd('');
@@ -521,7 +537,7 @@
                                     <div className="flex justify-end space-x-3">
                                         <button onClick={() => { setIsEasterEggModalOpen(false); setEasterEggPwd(''); }} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
                                         <button onClick={() => {
-                                            if (easterEggPwd === "admin1217") {
+                                            if (easterEggPwd === "admin") {
                                                 forceResetAccounts();
                                                 setIsEasterEggModalOpen(false);
                                                 setEasterEggPwd('');
