@@ -150,7 +150,7 @@
             const [matrixBossTab, setMatrixBossTab] = useState('all');
             const [raidFilterMode, setRaidFilterMode] = useState('all');
             const [draftAccounts, setDraftAccounts] = useState([]);
-            const [accSortMode, setAccSortMode] = useState('roleDesc'); // 帳號排序狀態
+            const [accSortMode, setAccSortMode] = useState('roleDesc'); 
 
             // 系統管理表單狀態
             const [newBossName, setNewBossName] = useState('');
@@ -197,14 +197,12 @@
             // 2. 生命週期與 Effect Hooks
             // ==========================================
 
-            // 深色模式連動
             useEffect(() => {
                 if (darkMode) document.documentElement.classList.add('dark');
                 else document.documentElement.classList.remove('dark');
                 setLocal('waku-raid-darkmode', darkMode);
             }, [darkMode]);
 
-            // Firebase 認證
             useEffect(() => {
                 if (!auth) return;
                 const initAuth = async () => {
@@ -221,7 +219,7 @@
                 return () => unsub();
             }, []);
 
-            // Firebase 資料同步讀取 (防空值白畫面保護)
+            // Firebase 資料同步讀取
             useEffect(() => {
                 if (!user || !db) return;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'main');
@@ -242,12 +240,10 @@
                 return () => unsub();
             }, [user]);
 
-            // 當系統帳號更新時，同步到系統管理的草稿區
             useEffect(() => {
                 setDraftAccounts(accounts || []);
             }, [accounts]);
 
-            // 記憶密碼連動
             useEffect(() => {
                 if (rememberMe) {
                     const savedName = getLocal('waku-raid-saved-name');
@@ -257,7 +253,6 @@
                 }
             }, [rememberMe]);
 
-            // 彩蛋連擊重置計時器
             useEffect(() => {
                 if (swordClicks > 0) {
                     const timer = setTimeout(() => setSwordClicks(0), 600);
@@ -269,7 +264,6 @@
             // 3. 共用運算與資料更新函式
             // ==========================================
 
-            // 日期計算與防當機
             const days = useMemo(() => {
                 const start = new Date(weekStartDate);
                 const wdays = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
@@ -281,7 +275,6 @@
                 });
             }, [weekStartDate]);
 
-            // --- 帳號動態排序運算 ---
             const roleWeight = { admin: 4, subadmin: 3, member: 2, guest: 1 };
             const getJoinDate = (acc) => {
                 if (acc.joinDate) return acc.joinDate;
@@ -298,7 +291,7 @@
                     if (accSortMode === 'roleDesc') {
                         const diff = (roleWeight[b.role] || 0) - (roleWeight[a.role] || 0);
                         if (diff !== 0) return diff;
-                        return (getJoinDate(b) || 0) - (getJoinDate(a) || 0); // 同權限依加入日期新到舊
+                        return (getJoinDate(b) || 0) - (getJoinDate(a) || 0); 
                     } else if (accSortMode === 'dateDesc') {
                         return (getJoinDate(b) || 0) - (getJoinDate(a) || 0);
                     } else if (accSortMode === 'dateAsc') {
@@ -482,6 +475,7 @@
                         if (!/^[a-zA-Z0-9]{4,8}$/.test(finalPasscode)) { setRegError('密碼格式錯誤！只能使用英文與數字，且長度需為 4 到 8 碼。'); return; }
                     } else { finalPasscode = '1234'; }
                     const newAccId = 'a_' + Date.now();
+                    // 🌟 重點：新註冊的帳號預設為 guest (未開通)，需管理員核准
                     const newAcc = { id: newAccId, playerName: cleanRegName, role: 'guest', passcode: finalPasscode, joinDate: Date.now() };
                     setAccounts([...(accounts || []), newAcc]);
                     setIsRegisterOpen(false);
@@ -851,6 +845,17 @@
             const renderAvailabilityMatrix = () => {
                 const assignCharToGroup = (charId, groupId) => {
                     if (!groupId) return;
+                    
+                    const totalWeeklyAssigned = (groups || []).reduce((sum, g) => {
+                        const inMembers = (g.members || []).includes(charId) ? 1 : 0;
+                        const inReserves = (g.reserves || []).includes(charId) ? 1 : 0;
+                        return sum + inMembers + inReserves;
+                    }, 0);
+                    if (totalWeeklyAssigned >= 2) {
+                        setAlertMessage('⚠️ 指派失敗！此角色一週內已經被排入 2 個隊伍了，達數量上限。');
+                        return;
+                    }
+
                     const group = (groups || []).find(g => g.id === groupId);
                     if (!group) return;
                     const emptyIdx = (group.members || []).findIndex(m => m === '');
@@ -1003,6 +1008,13 @@
                                     
                                     const sameAccountCharIds = (characters || []).filter(c => c.accountId === char.accountId).map(c => c.id);
 
+                                    // 計算該角色一週內總共被指派的次數
+                                    const totalWeeklyAssigned = (groups || []).reduce((sum, g) => {
+                                        const inMembers = (g.members || []).includes(char.id) ? 1 : 0;
+                                        const inReserves = (g.reserves || []).includes(char.id) ? 1 : 0;
+                                        return sum + inMembers + inReserves;
+                                    }, 0);
+
                                     return (
                                         <tr key={char.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b dark:border-gray-700">
                                             <td className="p-2 border dark:border-gray-700 font-bold text-gray-800 dark:text-gray-200">
@@ -1081,6 +1093,7 @@
                                                                     )
                                                                 })}
 
+                                                                {/* 🔥 修正：圖示完美回歸，加入 2 團反灰保護 */}
                                                                 {charGroupsOnDay.length === 0 && (
                                                                     <div className="text-lg drop-shadow-sm select-none my-1 flex flex-wrap justify-center gap-2">
                                                                         {safeBosses.map(bId => {
@@ -1091,10 +1104,12 @@
                                                                             const totalCount = parseInt(safeBossCounts[bId]) || 1;
                                                                             const assignedCount = (groups || []).filter(g => g.bossId === bId && ((g.members || []).includes(char.id) || (g.reserves || []).includes(char.id))).length;
                                                                             const remainingCount = Math.max(0, totalCount - assignedCount);
+                                                                            
+                                                                            const isGray = remainingCount <= 0 || totalWeeklyAssigned >= 2;
 
-                                                                            if (remainingCount <= 0) {
+                                                                            if (isGray) {
                                                                                 return (
-                                                                                    <span key={b.id} className="relative inline-flex items-center grayscale opacity-40" title="排班次數已滿">
+                                                                                    <span key={b.id} className="relative inline-flex items-center grayscale opacity-40" title={totalWeeklyAssigned >= 2 ? "本週已達 2 團上限" : "排班次數已滿"}>
                                                                                         <span>{b.icon}</span>
                                                                                     </span>
                                                                                 );
@@ -1116,7 +1131,7 @@
                                                                 )}
 
                                                                 {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
-                                                                    availableGroupsOnDay.length > 0 ? (
+                                                                    totalWeeklyAssigned >= 2 ? null : availableGroupsOnDay.length > 0 ? (
                                                                         <select
                                                                             className="w-full text-[11px] p-1 border border-blue-300 dark:border-blue-700 rounded mt-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 cursor-pointer font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
                                                                             value=""
@@ -1181,11 +1196,26 @@
                 };
 
                 const handleAssign = (groupId, slotType, slotIndex, charId) => {
+                    if (charId) {
+                        const totalWeeklyAssigned = (groups || []).reduce((sum, g) => {
+                            const inMembers = (g.members || []).includes(charId) ? 1 : 0;
+                            const inReserves = (g.reserves || []).includes(charId) ? 1 : 0;
+                            return sum + inMembers + inReserves;
+                        }, 0);
+                        const currentGroup = (groups || []).find(g => g.id === groupId);
+                        const isCurrentlyInSlot = currentGroup && currentGroup[slotType] && currentGroup[slotType][slotIndex] === charId;
+                        
+                        if (!isCurrentlyInSlot && totalWeeklyAssigned >= 2) {
+                            setAlertMessage('⚠️ 指派失敗！此角色一週內已經被排入 2 個隊伍了，達數量上限。');
+                            return;
+                        }
+                    }
+
                     const newGroups = (groups || []).map(g => {
                         if (g.id === groupId) {
                             const updatedList = [...(g[slotType] || [])];
                             updatedList[slotIndex] = charId;
-                            return { ...g, [slotType]: updatedList };
+                            return { ...g, [slotType] : updatedList };
                         }
                         return g;
                     });
@@ -1273,6 +1303,7 @@
                                                                 const conflictNames = getConflictGroupNames(memberId, group.id, group.dayIndex);
                                                                 
                                                                 let isOverQuota = false;
+                                                                let isOverWeeklyQuota = false;
                                                                 let isDuplicateInGroup = false;
                                                                 
                                                                 if (memberId && char) {
@@ -1283,12 +1314,20 @@
                                                                     
                                                                     if (assignedCount > totalCount) isOverQuota = true;
                                                                     if (safeMembers.filter(m => m === memberId).length > 1) isDuplicateInGroup = true;
+
+                                                                    const totalWeeklyAssigned = (groups || []).reduce((sum, g) => {
+                                                                        const inMembers = (g.members || []).includes(memberId) ? 1 : 0;
+                                                                        const inReserves = (g.reserves || []).includes(memberId) ? 1 : 0;
+                                                                        return sum + inMembers + inReserves;
+                                                                    }, 0);
+                                                                    if (totalWeeklyAssigned > 2) isOverWeeklyQuota = true;
                                                                 }
                                                                 
                                                                 let warnArr = [];
                                                                 if (conflictNames.length > 0) warnArr.push(`衝堂: ${conflictNames.join(', ')}`);
-                                                                if (isOverQuota) warnArr.push(`超排/未報名`);
-                                                                if (isDuplicateInGroup) warnArr.push(`重複入隊`);
+                                                                if (isOverWeeklyQuota) warnArr.push(`逾2團`);
+                                                                else if (isOverQuota) warnArr.push(`單王滿/未報`);
+                                                                if (isDuplicateInGroup) warnArr.push(`重複`);
                                                                 
                                                                 const warningText = warnArr.length > 0 ? `(⚠️ ${warnArr.join(', ')})` : '';
 
@@ -1322,6 +1361,7 @@
                                                                                         {(() => {
                                                                                             const eligible = [];
                                                                                             const quotaFull = [];
+                                                                                            const weeklyFullList = [];
                                                                                             const others = [];
                                                                                             
                                                                                             (characters || []).forEach(c => {
@@ -1333,23 +1373,32 @@
                                                                                                 const safeCBosses = cAvail.bosses || [];
                                                                                                 const isBossChecked = safeCBosses.includes(group.bossId);
                                                                                                 
-                                                                                                let remainingCount = 0;
+                                                                                                const totalWeeklyAssigned = (groups || []).reduce((sum, g) => {
+                                                                                                    const inMembers = (g.members || []).includes(c.id) ? 1 : 0;
+                                                                                                    const inReserves = (g.reserves || []).includes(c.id) ? 1 : 0;
+                                                                                                    return sum + inMembers + inReserves;
+                                                                                                }, 0);
+                                                                                                let adjustedWeeklyAssigned = totalWeeklyAssigned;
+                                                                                                if (memberId === c.id) adjustedWeeklyAssigned -= 1;
+                                                                                                const remainingWeeklyQuota = Math.max(0, 2 - adjustedWeeklyAssigned);
+
+                                                                                                let remainingBossQuota = 0;
                                                                                                 if (isBossChecked) {
                                                                                                     const safeCBossCounts = cAvail.bossCounts || {};
-                                                                                                    const totalCount = parseInt(safeCBossCounts[group.bossId]) || 1;
-                                                                                                    const assignedCount = (groups || []).filter(grp => grp.bossId === group.bossId && ((grp.members || []).includes(c.id) || (grp.reserves || []).includes(c.id))).length;
-                                                                                                    let adjustedAssigned = assignedCount;
-                                                                                                    if (memberId === c.id) {
-                                                                                                       adjustedAssigned -= 1;
-                                                                                                    }
-                                                                                                    remainingCount = Math.max(0, totalCount - adjustedAssigned);
+                                                                                                    const totalBossCount = parseInt(safeCBossCounts[group.bossId]) || 1;
+                                                                                                    const assignedBossCount = (groups || []).filter(grp => grp.bossId === group.bossId && ((grp.members || []).includes(c.id) || (grp.reserves || []).includes(c.id))).length;
+                                                                                                    let adjustedAssignedBoss = assignedBossCount;
+                                                                                                    if (memberId === c.id) adjustedAssignedBoss -= 1;
+                                                                                                    remainingBossQuota = Math.max(0, totalBossCount - adjustedAssignedBoss);
                                                                                                 }
 
-                                                                                                if (isDayChecked && isBossChecked) {
-                                                                                                    if (remainingCount > 0) {
-                                                                                                        eligible.push(c);
-                                                                                                    } else {
+                                                                                                if (remainingWeeklyQuota <= 0) {
+                                                                                                    weeklyFullList.push(c);
+                                                                                                } else if (isDayChecked && isBossChecked) {
+                                                                                                    if (remainingBossQuota <= 0) {
                                                                                                         quotaFull.push(c);
+                                                                                                    } else {
+                                                                                                        eligible.push(c);
                                                                                                     }
                                                                                                 } else {
                                                                                                     others.push(c);
@@ -1360,11 +1409,12 @@
                                                                                                 const cConflicts = getConflictGroupNames(c.id, group.id, group.dayIndex);
                                                                                                 let tags = [];
                                                                                                 if (cConflicts.length > 0) tags.push(`衝堂: ${cConflicts.join(', ')}`);
-                                                                                                if (type === 'quotaFull') tags.push('次數滿');
+                                                                                                if (type === 'weeklyFull') tags.push('一週滿2團');
+                                                                                                else if (type === 'quotaFull') tags.push('單王滿');
                                                                                                 
                                                                                                 const cWarn = tags.length > 0 ? ` (⚠️ ${tags.join(', ')})` : '';
                                                                                                 return (
-                                                                                                    <option key={c.id} value={c.id} className="dark:bg-gray-800 dark:text-gray-200">
+                                                                                                    <option key={c.id} value={c.id} className="dark:bg-gray-800 dark:text-gray-200" disabled={type === 'weeklyFull'}>
                                                                                                         [{c.job}] {c.name} (Lv.{c.level}){cWarn}
                                                                                                     </option>
                                                                                                 );
@@ -1380,6 +1430,11 @@
                                                                                                     {quotaFull.length > 0 && (
                                                                                                         <optgroup label="⚠️ 次數用盡 (已排滿)">
                                                                                                             {quotaFull.map(c => renderOpt(c, 'quotaFull'))}
+                                                                                                        </optgroup>
+                                                                                                    )}
+                                                                                                    {weeklyFullList.length > 0 && (
+                                                                                                        <optgroup label="⛔ 本週滿2團 (強制無法指派)">
+                                                                                                            {weeklyFullList.map(c => renderOpt(c, 'weeklyFull'))}
                                                                                                         </optgroup>
                                                                                                     )}
                                                                                                     {others.length > 0 && (
@@ -1683,6 +1738,7 @@
                                                     value={acc.passcode !== undefined ? acc.passcode : ''} 
                                                     onChange={(e) => {
                                                         const val = e.target.value;
+                                                        // 限制只能輸入英文字母和數字，最多 8 碼
                                                         if (val === '' || /^[a-zA-Z0-9]{0,8}$/.test(val)) {
                                                             updateDraft(acc.id, 'passcode', val);
                                                         }
