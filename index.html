@@ -150,6 +150,7 @@
             const [matrixBossTab, setMatrixBossTab] = useState('all');
             const [raidFilterMode, setRaidFilterMode] = useState('all');
             const [draftAccounts, setDraftAccounts] = useState([]);
+            const [accSortMode, setAccSortMode] = useState('roleDesc'); // 帳號排序狀態
 
             // 系統管理表單狀態
             const [newBossName, setNewBossName] = useState('');
@@ -235,7 +236,6 @@
                         _setGroups(data.groups || initialGroups || []);
                         _setWeekStartDate(data.weekStartDate || new Date().toISOString().split('T')[0]);
                     } else {
-                        // 初始化資料庫
                         setDoc(docRef, { bosses: initialBosses, jobCategories: initialJobCategories, accounts: initialAccounts, characters: initialCharacters, availability: initialAvailability, groups: initialGroups, weekStartDate: new Date().toISOString().split('T')[0] });
                     }
                 }, (err) => console.error(err));
@@ -246,6 +246,28 @@
             useEffect(() => {
                 setDraftAccounts(accounts || []);
             }, [accounts]);
+
+            // 記憶密碼連動
+            useEffect(() => {
+                if (rememberMe) {
+                    const savedName = getLocal('waku-raid-saved-name');
+                    const savedPwd = getLocal('waku-raid-saved-pwd');
+                    if (savedName) setLoginName(savedName);
+                    if (savedPwd) setPasscode(savedPwd);
+                }
+            }, [rememberMe]);
+
+            // 彩蛋連擊重置計時器
+            useEffect(() => {
+                if (swordClicks > 0) {
+                    const timer = setTimeout(() => setSwordClicks(0), 600);
+                    return () => clearTimeout(timer);
+                }
+            }, [swordClicks]);
+
+            // ==========================================
+            // 3. 共用運算與資料更新函式
+            // ==========================================
 
             // 日期計算與防當機
             const days = useMemo(() => {
@@ -259,9 +281,33 @@
                 });
             }, [weekStartDate]);
 
-            // ==========================================
-            // 3. 共用運算與資料更新函式
-            // ==========================================
+            // --- 帳號動態排序運算 ---
+            const roleWeight = { admin: 4, subadmin: 3, member: 2, guest: 1 };
+            const getJoinDate = (acc) => {
+                if (acc.joinDate) return acc.joinDate;
+                if (acc.id && acc.id.startsWith('a_')) {
+                    const ts = parseInt(acc.id.replace('a_', ''));
+                    if (!isNaN(ts)) return ts;
+                }
+                return null; 
+            };
+
+            const sortedAccounts = useMemo(() => {
+                let sorted = [...(draftAccounts || [])];
+                sorted.sort((a, b) => {
+                    if (accSortMode === 'roleDesc') {
+                        const diff = (roleWeight[b.role] || 0) - (roleWeight[a.role] || 0);
+                        if (diff !== 0) return diff;
+                        return (getJoinDate(b) || 0) - (getJoinDate(a) || 0); // 同權限依加入日期新到舊
+                    } else if (accSortMode === 'dateDesc') {
+                        return (getJoinDate(b) || 0) - (getJoinDate(a) || 0);
+                    } else if (accSortMode === 'dateAsc') {
+                        return (getJoinDate(a) || 0) - (getJoinDate(b) || 0);
+                    }
+                    return 0;
+                });
+                return sorted;
+            }, [draftAccounts, accSortMode]);
 
             const updateCloud = (key, val) => {
                 if (!user || !db) return;
@@ -528,7 +574,7 @@
                                                 if (!/^[a-zA-Z0-9]{4,8}$/.test(finalPasscode)) { setRegError('密碼格式錯誤！只能使用英文與數字，且長度需為 4 到 8 碼。'); return; }
                                             } else { finalPasscode = '1234'; }
                                             const newAccId = 'a_' + Date.now();
-                                            const newAcc = { id: newAccId, playerName: cleanRegName, role: 'guest', passcode: finalPasscode };
+                                            const newAcc = { id: newAccId, playerName: cleanRegName, role: 'guest', passcode: finalPasscode, joinDate: Date.now() };
                                             setAccounts([...(accounts || []), newAcc]);
                                             setIsRegisterOpen(false);
                                             setRegName('');
@@ -1381,24 +1427,12 @@
             };
 
              const renderSystemManagement = () => {
-                const [newBossName, setNewBossName] = useState('');
-                const [newBossIcon, setNewBossIcon] = useState('🔥');
-                const [newBossColor, setNewBossColor] = useState('#ef4444');
+                const handleAddBoss = () => {
+                    if(!newBossName || !newBossIcon) return;
+                    setBosses([...(bosses || []), { id: 'b_' + Date.now(), name: newBossName, icon: newBossIcon, color: newBossColor }]);
+                    setNewBossName('');
+                };
 
-                const [newJobCatName, setNewJobCatName] = useState('');
-                const [newJobCatBg, setNewJobCatBg] = useState('#dbeafe');
-                const [newJobCatText, setNewJobCatText] = useState('#1e3a8a');
-                
-                const [newAccName, setNewAccName] = useState('');
-                const [accSortMode, setAccSortMode] = useState('roleDesc'); // 帳號排序狀態
-                
-                // 帳號編輯的暫存狀態
-                const [draftAccounts, setDraftAccounts] = useState(accounts || []);
-
-                // 當雲端帳號有變動時，同步到暫存（首次載入或其他人修改時）
-                useEffect(() => {
-                    setDraftAccounts(accounts || []);
-                }, [accounts]);
                 const handleAddJobCat = () => {
                     if(!newJobCatName) return;
                     setJobCategories([...(jobCategories || []), { 
@@ -1454,34 +1488,6 @@
                 const updateDraft = (id, field, value) => {
                     setDraftAccounts((draftAccounts || []).map(a => a.id === id ? { ...a, [field]: value } : a));
                 };
-
-                // --- 帳號動態排序運算 ---
-                const roleWeight = { admin: 4, subadmin: 3, member: 2, guest: 1 };
-                const getJoinDate = (acc) => {
-                    if (acc.joinDate) return acc.joinDate;
-                    if (acc.id && acc.id.startsWith('a_')) {
-                        const ts = parseInt(acc.id.replace('a_', ''));
-                        if (!isNaN(ts)) return ts;
-                    }
-                    return null; 
-                };
-
-                const sortedAccounts = useMemo(() => {
-                    let sorted = [...(draftAccounts || [])];
-                    sorted.sort((a, b) => {
-                        if (accSortMode === 'roleDesc') {
-                            const diff = (roleWeight[b.role] || 0) - (roleWeight[a.role] || 0);
-                            if (diff !== 0) return diff;
-                            return (getJoinDate(b) || 0) - (getJoinDate(a) || 0); // 同權限依加入日期新到舊
-                        } else if (accSortMode === 'dateDesc') {
-                            return (getJoinDate(b) || 0) - (getJoinDate(a) || 0);
-                        } else if (accSortMode === 'dateAsc') {
-                            return (getJoinDate(a) || 0) - (getJoinDate(b) || 0);
-                        }
-                        return 0;
-                    });
-                    return sorted;
-                }, [draftAccounts, accSortMode]);
 
                 return (
                     <div className="space-y-6">
