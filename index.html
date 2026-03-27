@@ -1488,8 +1488,14 @@
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">本週起始日期 (通常設為週四)</label>
                                     <input type="date" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded h-[42px] cursor-pointer" value={weekStartDate} onChange={(e) => setWeekStartDate(e.target.value)} />
                                 </div>
+                                <div className="ml-auto">
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">每週重置</label>
+                                    <button onClick={() => setIsConfirmResetOpen(true)} className="bg-yellow-600 text-white px-5 py-2 rounded font-bold hover:bg-yellow-700 shadow h-[42px] flex items-center transition-colors">
+                                        <span className="mr-2">⚠️</span> 換週清空表單
+                                    </button>
+                                </div>
                             </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">💡 提示：更改起始日期後，所有頁面的日期將會自動順延 7 天。準備開新團前，如果您想清空報名資料重新開始，請至登入畫面連點左上方劍圖示以進行重置。</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">💡 提示：更改起始日期後，所有頁面的日期將會自動順延 7 天。準備開新團前，請點擊「換週清空表單」將所有人舊的打勾紀錄與排團歸零（不影響角色與帳號）。</p>
                         </div>
 
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-t-4 border-blue-500 transition-colors">
