@@ -1426,7 +1426,23 @@
                     }
 
                     setAccounts(draftAccounts);
-                    setAlertMessage('帳號與權限變更已成功儲存！');
+                    
+                    // 同步更新角色名稱
+                    let charactersUpdated = false;
+                    const updatedCharacters = (characters || []).map(c => {
+                        const acc = draftAccounts.find(a => a.id === c.accountId);
+                        if (acc && acc.playerName !== c.name) {
+                            charactersUpdated = true;
+                            return { ...c, name: acc.playerName };
+                        }
+                        return c;
+                    });
+                    
+                    if (charactersUpdated) {
+                        setCharacters(updatedCharacters);
+                    }
+
+                    setAlertMessage('帳號、權限與名稱變更已成功儲存！');
                 };
 
                 const updateDraft = (id, field, value) => {
@@ -1569,7 +1585,32 @@
                                 <tbody>
                                     {(draftAccounts || []).map(acc => (
                                         <tr key={acc.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b dark:border-gray-700 transition-colors text-gray-800 dark:text-gray-200">
-                                            <td className="p-3 border dark:border-gray-700 font-medium">{acc.playerName}</td>
+                                            <td className="p-3 border dark:border-gray-700 font-medium">
+                                                <div className="flex items-center justify-between group">
+                                                    <span>{acc.playerName}</span>
+                                                    <button 
+                                                        onClick={() => {
+                                                            const newName = window.prompt("請輸入新的玩家(帳號)名稱：", acc.playerName);
+                                                            if (newName !== null) {
+                                                                const cleanName = newName.trim();
+                                                                if (cleanName === "") {
+                                                                    setAlertMessage("⚠️ 玩家名稱不能為空！");
+                                                                    return;
+                                                                }
+                                                                if (draftAccounts.some(a => a.id !== acc.id && a.playerName.toLowerCase() === cleanName.toLowerCase())) {
+                                                                    setAlertMessage("⚠️ 此名稱已被其他玩家註冊使用！");
+                                                                    return;
+                                                                }
+                                                                updateDraft(acc.id, 'playerName', cleanName);
+                                                            }
+                                                        }}
+                                                        className="text-gray-400 hover:text-blue-500 opacity-50 group-hover:opacity-100 transition-opacity px-1"
+                                                        title="修改玩家名稱"
+                                                    >
+                                                        ✏️
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td className="p-3 border dark:border-gray-700">
                                                 <input 
                                                     type="text" 
@@ -1612,7 +1653,7 @@
                                     ))}
                                 </tbody>
                             </table>
-                            <p className="text-xs text-orange-500 mt-3 font-bold">※ 所有變更 (修改密碼、調整權限、移除帳號) 必須點擊右上角的「💾 儲存帳號變更」按鈕才會真正生效！</p>
+                            <p className="text-xs text-orange-500 mt-3 font-bold">※ 所有變更 (修改密碼、調整權限、變更名稱、移除帳號) 必須點擊右上角的「💾 儲存帳號變更」按鈕才會真正生效！</p>
                         </div>
                     </div>
                 );
