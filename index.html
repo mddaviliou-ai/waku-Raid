@@ -63,7 +63,7 @@
         };
 
         // ⚠️【系統強制重置密碼】⚠️ (當系統崩潰或測試完要清空時，連點登入頁左上角的劍3下輸入此密碼)
-        const MASTER_RESET_PASSWORD = "ji3g4t86au3"; // <--- 您可以在這裡自訂您的專屬重置密碼
+        const MASTER_RESET_PASSWORD = "admin"; // <--- 您可以在這裡自訂您的專屬重置密碼
 
         try {
             const envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -87,8 +87,8 @@
         ];
 
         const initialAccounts = [
-            { id: 'a1', playerName: '伊爾參寺', role: 'admin', passcode: 'admin111' },
-            { id: 'a2', playerName: '熱狗蛋蛋', role: 'subadmin', passcode: 'admin' }
+            { id: 'a1', playerName: '伊爾參寺', role: 'admin', passcode: 'admin111', joinDate: Date.now() },
+            { id: 'a2', playerName: '熱狗蛋蛋', role: 'subadmin', passcode: 'admin', joinDate: Date.now() }
         ];
 
         const initialJobCategories = [
@@ -433,16 +433,10 @@
                     }
                     let finalPasscode = (regPasscode || '').trim();
                     if (finalPasscode !== '') {
-                        if (!/^[a-zA-Z0-9]{4,8}$/.test(finalPasscode)) {
-                            setRegError('密碼格式錯誤！只能使用英文與數字，且長度需為 4 到 8 碼。');
-                            return;
-                        }
-                    } else {
-                        finalPasscode = '1234'; 
-                    }
+                        if (!/^[a-zA-Z0-9]{4,8}$/.test(finalPasscode)) { setRegError('密碼格式錯誤！只能使用英文與數字，且長度需為 4 到 8 碼。'); return; }
+                    } else { finalPasscode = '1234'; }
                     const newAccId = 'a_' + Date.now();
-                    // 🌟 重點：新註冊的帳號預設為 guest (未開通)，需管理員核准
-                    const newAcc = { id: newAccId, playerName: cleanRegName, role: 'guest', passcode: finalPasscode };
+                    const newAcc = { id: newAccId, playerName: cleanRegName, role: 'guest', passcode: finalPasscode, joinDate: Date.now() };
                     setAccounts([...(accounts || []), newAcc]);
                     setIsRegisterOpen(false);
                     setRegName('');
@@ -1387,12 +1381,24 @@
             };
 
              const renderSystemManagement = () => {
-                const handleAddBoss = () => {
-                    if(!newBossName || !newBossIcon) return;
-                    setBosses([...(bosses || []), { id: 'b_' + Date.now(), name: newBossName, icon: newBossIcon, color: newBossColor }]);
-                    setNewBossName('');
-                };
+                const [newBossName, setNewBossName] = useState('');
+                const [newBossIcon, setNewBossIcon] = useState('🔥');
+                const [newBossColor, setNewBossColor] = useState('#ef4444');
 
+                const [newJobCatName, setNewJobCatName] = useState('');
+                const [newJobCatBg, setNewJobCatBg] = useState('#dbeafe');
+                const [newJobCatText, setNewJobCatText] = useState('#1e3a8a');
+                
+                const [newAccName, setNewAccName] = useState('');
+                const [accSortMode, setAccSortMode] = useState('roleDesc'); // 帳號排序狀態
+                
+                // 帳號編輯的暫存狀態
+                const [draftAccounts, setDraftAccounts] = useState(accounts || []);
+
+                // 當雲端帳號有變動時，同步到暫存（首次載入或其他人修改時）
+                useEffect(() => {
+                    setDraftAccounts(accounts || []);
+                }, [accounts]);
                 const handleAddJobCat = () => {
                     if(!newJobCatName) return;
                     setJobCategories([...(jobCategories || []), { 
@@ -1408,7 +1414,7 @@
 
                 const handleAddAccountDraft = () => {
                     if(!newAccName) return;
-                    setDraftAccounts([...(draftAccounts || []), { id: 'a_' + Date.now(), playerName: newAccName, role: 'member', passcode: '1234' }]);
+                    setDraftAccounts([...(draftAccounts || []), { id: 'a_' + Date.now(), playerName: newAccName, role: 'member', passcode: '1234', joinDate: Date.now() }]);
                     setNewAccName('');
                 };
                 
@@ -1448,6 +1454,34 @@
                 const updateDraft = (id, field, value) => {
                     setDraftAccounts((draftAccounts || []).map(a => a.id === id ? { ...a, [field]: value } : a));
                 };
+
+                // --- 帳號動態排序運算 ---
+                const roleWeight = { admin: 4, subadmin: 3, member: 2, guest: 1 };
+                const getJoinDate = (acc) => {
+                    if (acc.joinDate) return acc.joinDate;
+                    if (acc.id && acc.id.startsWith('a_')) {
+                        const ts = parseInt(acc.id.replace('a_', ''));
+                        if (!isNaN(ts)) return ts;
+                    }
+                    return null; 
+                };
+
+                const sortedAccounts = useMemo(() => {
+                    let sorted = [...(draftAccounts || [])];
+                    sorted.sort((a, b) => {
+                        if (accSortMode === 'roleDesc') {
+                            const diff = (roleWeight[b.role] || 0) - (roleWeight[a.role] || 0);
+                            if (diff !== 0) return diff;
+                            return (getJoinDate(b) || 0) - (getJoinDate(a) || 0); // 同權限依加入日期新到舊
+                        } else if (accSortMode === 'dateDesc') {
+                            return (getJoinDate(b) || 0) - (getJoinDate(a) || 0);
+                        } else if (accSortMode === 'dateAsc') {
+                            return (getJoinDate(a) || 0) - (getJoinDate(b) || 0);
+                        }
+                        return 0;
+                    });
+                    return sorted;
+                }, [draftAccounts, accSortMode]);
 
                 return (
                     <div className="space-y-6">
@@ -1576,14 +1610,39 @@
                             <table className="w-full border-collapse text-sm text-left mt-4">
                                 <thead>
                                     <tr className="bg-gray-100 dark:bg-gray-700/50 border-b dark:border-gray-700 text-gray-800 dark:text-gray-200">
-                                        <th className="p-3 border dark:border-gray-700">玩家(帳號)名稱</th>
-                                        <th className="p-3 border dark:border-gray-700">登入密碼</th>
-                                        <th className="p-3 border dark:border-gray-700">系統權限</th>
-                                        <th className="p-3 border dark:border-gray-700 text-center">操作</th>
+                                        <th className="p-3 border dark:border-gray-700 w-1/4">玩家(帳號)名稱</th>
+                                        <th className="p-3 border dark:border-gray-700 w-1/5">登入密碼</th>
+                                        <th className="p-3 border dark:border-gray-700 w-1/5">
+                                            <div className="flex items-center space-x-1">
+                                                <span>系統權限</span>
+                                                <div className="relative w-4 h-4 text-blue-500 hover:text-blue-700 transition-colors cursor-pointer" title="選擇排序方式">
+                                                    <select className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" value={accSortMode} onChange={(e) => setAccSortMode(e.target.value)}>
+                                                        <option value="roleDesc">依權限 (高至低)</option>
+                                                        <option value="dateDesc">依加入日期 (新至舊)</option>
+                                                        <option value="dateAsc">依加入日期 (舊至新)</option>
+                                                    </select>
+                                                    <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th className="p-3 border dark:border-gray-700 w-1/5">
+                                            <div className="flex items-center space-x-1">
+                                                <span>加入日期</span>
+                                                <div className="relative w-4 h-4 text-blue-500 hover:text-blue-700 transition-colors cursor-pointer" title="選擇排序方式">
+                                                    <select className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" value={accSortMode} onChange={(e) => setAccSortMode(e.target.value)}>
+                                                        <option value="dateDesc">依加入日期 (新至舊)</option>
+                                                        <option value="dateAsc">依加入日期 (舊至新)</option>
+                                                        <option value="roleDesc">依權限 (高至低)</option>
+                                                    </select>
+                                                    <svg className="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th className="p-3 border dark:border-gray-700 text-center w-24">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {(draftAccounts || []).map(acc => (
+                                    {(sortedAccounts || []).map(acc => (
                                         <tr key={acc.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b dark:border-gray-700 transition-colors text-gray-800 dark:text-gray-200">
                                             <td className="p-3 border dark:border-gray-700 font-medium">
                                                 <div className="flex items-center justify-between group">
@@ -1614,7 +1673,7 @@
                                             <td className="p-3 border dark:border-gray-700">
                                                 <input 
                                                     type="text" 
-                                                    className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-32 text-center font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-colors" 
+                                                    className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-full text-center font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-colors" 
                                                     value={acc.passcode !== undefined ? acc.passcode : ''} 
                                                     onChange={(e) => {
                                                         const val = e.target.value;
@@ -1627,7 +1686,7 @@
                                             </td>
                                             <td className="p-3 border dark:border-gray-700">
                                                 <select 
-                                                    className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded transition-colors"
+                                                    className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-full transition-colors"
                                                     value={acc.role}
                                                     onChange={(e) => updateDraft(acc.id, 'role', e.target.value)}
                                                 >
@@ -1637,9 +1696,17 @@
                                                     <option value="admin">管理員</option>
                                                 </select>
                                             </td>
+                                            <td className="p-3 border dark:border-gray-700 text-gray-500 dark:text-gray-400 text-sm whitespace-nowrap">
+                                                {(() => {
+                                                    const jd = getJoinDate(acc);
+                                                    if (!jd) return '舊版帳號';
+                                                    const d = new Date(jd);
+                                                    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+                                                })()}
+                                            </td>
                                             <td className="p-3 border dark:border-gray-700 text-center">
                                                  <button 
-                                                    className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-bold px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                                                    className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-bold px-2 py-1 text-xs rounded hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors whitespace-nowrap"
                                                     onClick={() => {
                                                         if (acc.id === currentAccount.id) {
                                                             setAlertMessage('⚠️ 您不能移除自己的帳號！');
@@ -1647,7 +1714,7 @@
                                                         }
                                                         setDraftAccounts((draftAccounts || []).filter(a => a.id !== acc.id));
                                                     }}
-                                                 >移除(未儲存)</button>
+                                                 >移除</button>
                                             </td>
                                         </tr>
                                     ))}
