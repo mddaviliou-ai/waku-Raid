@@ -151,6 +151,9 @@
             const [raidFilterMode, setRaidFilterMode] = useState('all');
             const [draftAccounts, setDraftAccounts] = useState([]);
             const [accSortMode, setAccSortMode] = useState('roleDesc'); 
+            
+            // 密碼顯示狀態
+            const [visiblePasswords, setVisiblePasswords] = useState({});
 
             // 系統管理表單狀態
             const [newBossName, setNewBossName] = useState('');
@@ -662,6 +665,17 @@
             const renderMemberSchedule = () => {
                 const myCharacters = (characters || []).filter(c => c.accountId === currentAccount.id);
                 
+                // 計算本週全系統「有報名」的不重複玩家數量
+                const signedUpAccountIds = new Set();
+                (characters || []).forEach(char => {
+                    const avail = (availability || {})[char.id];
+                    // 有勾選天數且有勾選王團，才算有報名
+                    if (avail && avail.days && avail.days.some(d => d) && avail.bosses && avail.bosses.length > 0) {
+                        signedUpAccountIds.add(char.accountId);
+                    }
+                });
+                const signedUpPlayersCount = signedUpAccountIds.size;
+                
                 const getAvail = (charId) => {
                     const base = localAvail[charId] || (availability || {})[charId] || {};
                     return { days: base.days || Array(7).fill(false), bosses: base.bosses || [], bossCounts: base.bossCounts || {}, note: base.note || '', maxWeeklyRuns: base.maxWeeklyRuns || 2 };
@@ -729,7 +743,12 @@
                 return (
                     <div className="space-y-6">
                         <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-blue-500 transition-colors">
-                            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">我的資訊卡</h2>
+                            <div className="flex items-center">
+                                <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">我的資訊卡</h2>
+                                <span className="ml-3 px-2.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-sm font-bold rounded-full shadow-sm border border-blue-200 dark:border-blue-800">
+                                    本週已報名玩家: {signedUpPlayersCount} 人
+                                </span>
+                            </div>
                             <button onClick={() => {
                                 setEditCharId(null);
                                 setNewChar({ name: currentAccount.playerName, job: '', jobTypeId: '', level: 0 });
@@ -742,6 +761,7 @@
                         {myCharacters.map((char) => {
                             const charAvail = getAvail(char.id);
                             
+                            // Calculate dynamically the sum of all checked bosses' counts (過濾已刪除王團)
                             const validSelectedBosses = (charAvail.bosses || []).filter(bId => bosses.some(b => b.id === bId));
                             const totalSelectedRuns = validSelectedBosses.reduce((sum, bId) => sum + (parseInt((charAvail.bossCounts || {})[bId]) || 1), 0);
                             const allowedMaxRuns = Math.max(1, Math.min(2, totalSelectedRuns));
@@ -772,7 +792,7 @@
 
                                     {/* 王團與場次選擇 */}
                                     <div className="mb-6 bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-100 dark:border-orange-800/30">
-                                        <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週想打的王與場次數 (可複選)：</h3>
+                                        <h3 className="font-bold text-orange-800 dark:text-orange-400 mb-3">請選擇此角色本週突襲王與場數 (可複選)：</h3>
                                         <div className="flex flex-wrap gap-4">
                                             {(bosses || []).map(boss => {
                                                 const isChecked = (charAvail.bosses || []).includes(boss.id);
@@ -1393,7 +1413,7 @@
                                                                 
                                                                 let warnArr = [];
                                                                 if (conflictNames.length > 0) warnArr.push(`衝堂: ${conflictNames.join(', ')}`);
-                                                                if (isOverWeeklyQuota) warnArr.push(`逾本週上限`);
+                                                                if (isOverWeeklyQuota) warnArr.push(`逾上限`);
                                                                 else if (isOverQuota) warnArr.push(`單王滿/未報`);
                                                                 if (isDuplicateInGroup) warnArr.push(`重複`);
                                                                 
@@ -1724,7 +1744,12 @@
 
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-t-4 border-blue-500 transition-colors">
                             <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">公會帳號權限與密碼管理</h2>
+                                <div className="flex items-center space-x-3">
+                                    <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">公會帳號權限與密碼管理</h2>
+                                    <span className="px-2.5 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold rounded-full border border-blue-200 dark:border-blue-800">
+                                        共 {draftAccounts.length} 人
+                                    </span>
+                                </div>
                                 <button onClick={handleSaveAccounts} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 shadow transition-colors flex items-center">
                                     💾 儲存帳號變更
                                 </button>
@@ -1802,18 +1827,28 @@
                                                 </div>
                                             </td>
                                             <td className="p-3 border dark:border-gray-700">
-                                                <input 
-                                                    type="text" 
-                                                    className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-full text-center font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-colors" 
-                                                    value={acc.passcode !== undefined ? acc.passcode : ''} 
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        if (val === '' || /^[a-zA-Z0-9]{0,8}$/.test(val)) {
-                                                            updateDraft(acc.id, 'passcode', val);
-                                                        }
-                                                    }}
-                                                    placeholder="4~8碼英數字"
-                                                />
+                                                <div className="relative flex items-center">
+                                                    <input 
+                                                        type={visiblePasswords[acc.id] ? "text" : "password"} 
+                                                        className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 pr-8 rounded w-full text-center font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-colors" 
+                                                        value={acc.passcode !== undefined ? acc.passcode : ''} 
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            // 限制只能輸入英文字母和數字，最多 8 碼
+                                                            if (val === '' || /^[a-zA-Z0-9]{0,8}$/.test(val)) {
+                                                                updateDraft(acc.id, 'passcode', val);
+                                                            }
+                                                        }}
+                                                        placeholder="4~8碼英數字"
+                                                    />
+                                                    <button 
+                                                        onClick={() => setVisiblePasswords(prev => ({...prev, [acc.id]: !prev[acc.id]}))}
+                                                        className="absolute right-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 focus:outline-none"
+                                                        title={visiblePasswords[acc.id] ? "隱藏密碼" : "顯示密碼"}
+                                                    >
+                                                        {visiblePasswords[acc.id] ? '🙈' : '👁️'}
+                                                    </button>
+                                                </div>
                                             </td>
                                             <td className="p-3 border dark:border-gray-700">
                                                 <select 
@@ -1832,7 +1867,7 @@
                                                     const jd = getJoinDate(acc);
                                                     if (!jd) return '舊版帳號';
                                                     const d = new Date(jd);
-                                                    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+                                                    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                                                 })()}
                                             </td>
                                             <td className="p-3 border dark:border-gray-700 text-center">
