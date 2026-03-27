@@ -121,7 +121,7 @@
 
         const App = () => {
             // ==========================================
-            // 1. 扁平化集中管理所有全域狀態 (防止元件卸載遺失)
+            // 1. 扁平化集中管理所有全域狀態 (防止元件卸載遺失與白畫面)
             // ==========================================
             
             // 深色模式狀態
@@ -164,10 +164,13 @@
             const [isAddCharModalOpen, setIsAddCharModalOpen] = useState(false);
             const [newChar, setNewChar] = useState({ name: '', job: '', jobTypeId: '', level: 200 });
             const [editCharId, setEditCharId] = useState(null);
+            
+            // 🐛 修復重點：補回負責刪除功能的狀態，消滅白畫面！
             const [charToDelete, setCharToDelete] = useState(null);
             const [accountToDelete, setAccountToDelete] = useState(null);
-            const [alertMessage, setAlertMessage] = useState('');
             const [groupToDelete, setGroupToDelete] = useState(null);
+            
+            const [alertMessage, setAlertMessage] = useState('');
             const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false); 
             
             // 登入畫面狀態
@@ -255,6 +258,53 @@
                 }
             }, [swordClicks]);
 
+            // 日期計算與防當機 (提至最高層)
+            const days = useMemo(() => {
+                const start = new Date(weekStartDate);
+                const wdays = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+                return Array.from({length: 7}).map((_, i) => {
+                    const d = new Date(start);
+                    d.setDate(d.getDate() + i);
+                    if (isNaN(d.getTime())) return `日期錯誤`; 
+                    return `${d.getMonth()+1}/${d.getDate()} ${wdays[d.getDay()]}`;
+                });
+            }, [weekStartDate]);
+
+            // 總表排序邏輯
+            const sortedCharacters = useMemo(() => {
+                let sorted = [...(characters || [])];
+                if (matrixSortMode === 'name') {
+                    sorted.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
+                } else if (matrixSortMode === 'job') {
+                    sorted.sort((a, b) => {
+                        const jcA = (jobCategories || []).find(j => j.id === a.jobTypeId);
+                        const jcB = (jobCategories || []).find(j => j.id === b.jobTypeId);
+                        const groupA = jcA ? (jcA.group || '其他') : '其他';
+                        const groupB = jcB ? (jcB.group || '其他') : '其他';
+                        const groupCompare = groupA.localeCompare(groupB, 'zh-TW');
+                        if (groupCompare !== 0) return groupCompare;
+                        return (a.job || '').localeCompare((b.job || ''), 'zh-TW');
+                    });
+                } else if (matrixSortMode === 'levelDesc') {
+                    sorted.sort((a, b) => b.level - a.level);
+                } else if (matrixSortMode === 'levelAsc') {
+                    sorted.sort((a, b) => a.level - b.level);
+                }
+                return sorted; 
+            }, [characters, matrixSortMode, jobCategories]);
+
+            // 總表過濾邏輯
+            const displayCharacters = useMemo(() => {
+                return sortedCharacters.filter(char => {
+                    const avail = (availability || {})[char.id] || {};
+                    if (!avail.days || !avail.days.some(d => d)) return false;
+                    if (matrixBossTab !== 'all') {
+                        if (!avail.bosses || !avail.bosses.includes(matrixBossTab)) return false;
+                    }
+                    return true;
+                });
+            }, [sortedCharacters, availability, matrixBossTab]);
+
             // ==========================================
             // 3. 共用運算與資料更新函式
             // ==========================================
@@ -271,17 +321,6 @@
             const setAvailability = (val) => { _setAvailability(val || {}); updateCloud('availability', val || {}); };
             const setGroups = (val) => { _setGroups(val || []); updateCloud('groups', val || []); };
             const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
-
-            const days = useMemo(() => {
-                const start = new Date(weekStartDate);
-                const wdays = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
-                return Array.from({length: 7}).map((_, i) => {
-                    const d = new Date(start);
-                    d.setDate(d.getDate() + i);
-                    if (isNaN(d.getTime())) return `日期錯誤`; 
-                    return `${d.getMonth()+1}/${d.getDate()} ${wdays[d.getDay()]}`;
-                });
-            }, [weekStartDate]);
 
             const handleLogin = (id) => {
                 setLoggedInId(id);
@@ -485,75 +524,18 @@
                                 </div>
                             </div>
                         </div>
-                        
-                        {/* 註冊 Modal (獨立於主架構外，確保渲染安全) */}
-                        {isRegisterOpen && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center px-4" style={{ zIndex: 9999 }}>
-                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-green-500 transition-colors">
-                                    <h2 className="text-2xl font-black mb-4 flex items-center text-gray-800 dark:text-gray-100"><span className="text-green-500 mr-2">📝</span> 註冊新帳號</h2>
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">ID: DC名稱 (必填)</label>
-                                            <input type="text" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-green-500" placeholder="輸入您的 Discord 名稱" value={regName} onChange={e => setRegName(e.target.value)} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">自訂密碼 (選填)</label>
-                                            <input type="password" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-green-500" placeholder="限英數字4~8碼，不填預設為1234" value={regPasscode} onChange={e => setRegPasscode(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleRegister()} />
-                                        </div>
-                                    </div>
-                                    <div className="mt-6 flex justify-end space-x-3">
-                                        <button onClick={() => setIsRegisterOpen(false)} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
-                                        <button onClick={handleRegister} className="px-5 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow transition-colors">確認註冊</button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 彩蛋：系統重置 Modal */}
-                        {isEasterEggModalOpen && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center px-4" style={{ zIndex: 9999 }}>
-                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border-t-8 border-red-500 transition-colors">
-                                    <h2 className="text-xl font-black mb-4 flex items-center text-red-600 dark:text-red-400">⚠️ 系統重置警告</h2>
-                                    <p className="mb-4 text-sm text-gray-700 dark:text-gray-300">請輸入最高管理員密碼以清空並重置所有資料：</p>
-                                    <input 
-                                        type="password" 
-                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded focus:ring-2 focus:ring-red-500 mb-6" 
-                                        value={easterEggPwd} 
-                                        onChange={e => setEasterEggPwd(e.target.value)}
-                                        onKeyDown={e => {
-                                            if (e.key === 'Enter') {
-                                                if (easterEggPwd === "admin") {
-                                                    forceResetAccounts();
-                                                    setIsEasterEggModalOpen(false);
-                                                    setEasterEggPwd('');
-                                                } else {
-                                                    setLoginError('❌ 重置密碼錯誤。');
-                                                    setIsEasterEggModalOpen(false);
-                                                    setEasterEggPwd('');
-                                                }
-                                            }
-                                        }}
-                                    />
-                                    <div className="flex justify-end space-x-3">
-                                        <button onClick={() => { setIsEasterEggModalOpen(false); setEasterEggPwd(''); }} className="px-5 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded font-bold transition-colors">取消</button>
-                                        <button onClick={() => {
-                                            if (easterEggPwd === "admin") {
-                                                forceResetAccounts();
-                                                setIsEasterEggModalOpen(false);
-                                                setEasterEggPwd('');
-                                            } else {
-                                                setLoginError('❌ 重置密碼錯誤。');
-                                                setIsEasterEggModalOpen(false);
-                                                setEasterEggPwd('');
-                                            }
-                                        }} className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow transition-colors">確認重置</button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 );
             };
+
+            // ==========================================
+            // 🚨 核心防護：未登入時阻擋渲染後續元件
+            // ==========================================
+            if (!currentAccount) {
+                return renderLoginScreen();
+            }
+
+            // --- 登入後的元件渲染 ---
 
             const renderMemberSchedule = () => {
                 const myCharacters = (characters || []).filter(c => c.accountId === currentAccount.id);
@@ -770,34 +752,6 @@
                     setGroups(newGroups);
                 };
 
-                let sortedCharacters = [...(characters || [])];
-                if (matrixSortMode === 'name') {
-                    sortedCharacters.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
-                } else if (matrixSortMode === 'job') {
-                    sortedCharacters.sort((a, b) => {
-                        const jcA = (jobCategories || []).find(j => j.id === a.jobTypeId);
-                        const jcB = (jobCategories || []).find(j => j.id === b.jobTypeId);
-                        const groupA = jcA ? (jcA.group || '其他') : '其他';
-                        const groupB = jcB ? (jcB.group || '其他') : '其他';
-                        const groupCompare = groupA.localeCompare(groupB, 'zh-TW');
-                        if (groupCompare !== 0) return groupCompare;
-                        return (a.job || '').localeCompare((b.job || ''), 'zh-TW');
-                    });
-                } else if (matrixSortMode === 'levelDesc') {
-                    sortedCharacters.sort((a, b) => b.level - a.level);
-                } else if (matrixSortMode === 'levelAsc') {
-                    sortedCharacters.sort((a, b) => a.level - b.level);
-                }
-
-                const displayCharacters = sortedCharacters.filter(char => {
-                    const avail = (availability || {})[char.id] || {};
-                    if (!avail.days || !avail.days.some(d => d)) return false;
-                    if (matrixBossTab !== 'all') {
-                        if (!avail.bosses || !avail.bosses.includes(matrixBossTab)) return false;
-                    }
-                    return true;
-                });
-
                 return (
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow overflow-x-auto transition-colors">
                         <div className="flex justify-between items-center mb-4">
@@ -899,7 +853,7 @@
                                                 <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">{(accounts || []).find(a => a.id === char.accountId)?.playerName}</span>
                                             </td>
                                             <td className="p-2 border dark:border-gray-700">
-                                                <span style={getJobStyle(char.jobTypeId)} className="px-2 py-1 rounded text-xs font-bold shadow-sm">{char.job}</span>
+                                                <span style={getJobStyle(char.jobTypeId)} className="px-2 py-1 rounded text-sm font-bold shadow-sm">{char.job}</span>
                                                 <div className="text-[11px] text-gray-500 dark:text-gray-400 font-bold mt-1 pl-1">Lv.{char.level}</div>
                                             </td>
                                             <td className="p-2 border dark:border-gray-700">
@@ -1291,7 +1245,7 @@
                                                                         </td>
                                                                         <td className="p-1 border dark:border-gray-600 text-center">
                                                                             {char ? (
-                                                                                <span style={getJobStyle(char.jobTypeId, true)} className="px-2 py-1 rounded text-sm font-bold inline-block shadow-sm whitespace-nowrap">
+                                                                                <span style={getJobStyle(char.jobTypeId, true)} className="px-2.5 py-1 rounded text-sm font-bold inline-block shadow-sm whitespace-nowrap">
                                                                                     {char.job} {char.level}
                                                                                 </span>
                                                                             ) : (
@@ -1475,7 +1429,7 @@
                             <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 dark:bg-gray-700/50 p-4 rounded border dark:border-gray-700">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">新玩家名稱</label>
-                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-48" placeholder="例: (玩家)" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
+                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-48" placeholder="例: 瓜董(玩家)" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} />
                                 </div>
                                 <button onClick={handleAddAccountDraft} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white px-5 py-2 rounded font-bold hover:bg-gray-300 dark:hover:bg-gray-500 h-[42px] shadow transition-colors border dark:border-gray-500">➕ 新增玩家</button>
                             </div>
@@ -1780,8 +1734,8 @@
                                         (characters || []).forEach(c => {
                                             newAvail[c.id] = { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '' };
                                         });
-                                        setAvailability(newAvail); 
-                                        setGroups([]);             
+                                        setAvailability(newAvail); // 自動同步至雲端
+                                        setGroups([]);             // 自動同步至雲端
                                         setIsConfirmResetOpen(false);
                                         setAlertMessage('已成功清空所有報名資料與排班名單！大家可以開始填寫新的一週了！');
                                     }} className="px-5 py-2 bg-yellow-600 text-white rounded font-bold hover:bg-yellow-700 shadow transition-colors">確認清空</button>
