@@ -63,7 +63,7 @@
         };
 
         // ⚠️【系統強制重置密碼】⚠️ (當系統崩潰或測試完要清空時，連點登入頁左上角的劍3下輸入此密碼)
-        const MASTER_RESET_PASSWORD = "ji3g4t86au3"; // <--- 您可以在這裡自訂您的專屬重置密碼
+        const MASTER_RESET_PASSWORD = "admin"; // <--- 您可以在這裡自訂您的專屬重置密碼
 
         try {
             const envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -160,6 +160,7 @@
             const [newBossIcon, setNewBossIcon] = useState('🔥');
             const [newBossColor, setNewBossColor] = useState('#ef4444');
             const [newJobCatName, setNewJobCatName] = useState('');
+            const [newJobCatGroup, setNewJobCatGroup] = useState('自訂系別');
             const [newJobCatBg, setNewJobCatBg] = useState('#dbeafe');
             const [newJobCatText, setNewJobCatText] = useState('#1e3a8a');
             const [newAccName, setNewAccName] = useState('');
@@ -357,6 +358,59 @@
                 if (totalSelected === 0) return 2; 
                 return Math.min(avail.maxWeeklyRuns || 2, totalSelected);
             };
+            
+            // 計算群組順序(維持嚴格陣列順序)
+            const groupedJobsArray = useMemo(() => {
+                const groupsMap = new Map();
+                (jobCategories || []).forEach(jc => {
+                    const g = jc.group || '其他';
+                    if (!groupsMap.has(g)) groupsMap.set(g, []);
+                    groupsMap.get(g).push(jc);
+                });
+                return Array.from(groupsMap.entries()).map(([groupName, jobs]) => ({ groupName, jobs }));
+            }, [jobCategories]);
+
+            // --- 職業順序移動邏輯 ---
+            const moveGroup = (groupName, direction) => {
+                const uniqueGroups = [...new Set((jobCategories || []).map(j => j.group || '其他'))];
+                const idx = uniqueGroups.indexOf(groupName);
+                if (idx === -1) return;
+                if (direction === -1 && idx === 0) return;
+                if (direction === 1 && idx === uniqueGroups.length - 1) return;
+                
+                const targetIdx = idx + direction;
+                const newGroupOrder = [...uniqueGroups];
+                [newGroupOrder[idx], newGroupOrder[targetIdx]] = [newGroupOrder[targetIdx], newGroupOrder[idx]];
+                
+                const newJc = [...(jobCategories || [])].sort((a, b) => {
+                    const idxA = newGroupOrder.indexOf(a.group || '其他');
+                    const idxB = newGroupOrder.indexOf(b.group || '其他');
+                    if (idxA !== idxB) return idxA - idxB;
+                    // 同群組保持原本的相對順序
+                    return jobCategories.indexOf(a) - jobCategories.indexOf(b);
+                });
+                setJobCategories(newJc);
+            };
+
+            const moveJob = (jobId, direction) => {
+                const idx = (jobCategories || []).findIndex(j => j.id === jobId);
+                if (idx === -1) return;
+                const jc = jobCategories[idx];
+                const groupName = jc.group || '其他';
+                
+                const groupJobs = jobCategories.filter(j => (j.group || '其他') === groupName);
+                const groupIdx = groupJobs.findIndex(j => j.id === jobId);
+                
+                if (direction === -1 && groupIdx === 0) return;
+                if (direction === 1 && groupIdx === groupJobs.length - 1) return;
+                
+                const targetJobId = groupJobs[groupIdx + direction].id;
+                const targetIdx = jobCategories.findIndex(j => j.id === targetJobId);
+                
+                const newJc = [...jobCategories];
+                [newJc[idx], newJc[targetIdx]] = [newJc[targetIdx], newJc[idx]];
+                setJobCategories(newJc);
+            };
 
             // --- Modal 控制與執行邏輯 ---
             
@@ -430,13 +484,6 @@
                 setCharToDelete(null);
                 setAlertMessage('✅ 角色已成功刪除！');
             };
-
-            const groupedJobs = (jobCategories || []).reduce((acc, jc) => {
-                const g = jc.group || '其他';
-                if (!acc[g]) acc[g] = [];
-                acc[g].push(jc);
-                return acc;
-            }, {});
 
             // ==========================================
             // 4. 渲染各個頁面內容
@@ -947,13 +994,12 @@
                     sortedCharacters.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
                 } else if (matrixSortMode === 'job') {
                     sortedCharacters.sort((a, b) => {
-                        const jcA = (jobCategories || []).find(j => j.id === a.jobTypeId);
-                        const jcB = (jobCategories || []).find(j => j.id === b.jobTypeId);
-                        const groupA = jcA ? (jcA.group || '其他') : '其他';
-                        const groupB = jcB ? (jcB.group || '其他') : '其他';
-                        const groupCompare = groupA.localeCompare(groupB, 'zh-TW');
-                        if (groupCompare !== 0) return groupCompare;
-                        return (a.job || '').localeCompare((b.job || ''), 'zh-TW');
+                        const idxA = (jobCategories || []).findIndex(j => j.id === a.jobTypeId);
+                        const idxB = (jobCategories || []).findIndex(j => j.id === b.jobTypeId);
+                        const posA = idxA !== -1 ? idxA : 9999;
+                        const posB = idxB !== -1 ? idxB : 9999;
+                        if (posA !== posB) return posA - posB;
+                        return b.level - a.level;
                     });
                 } else if (matrixSortMode === 'levelDesc') {
                     sortedCharacters.sort((a, b) => b.level - a.level);
@@ -1447,12 +1493,22 @@
                                                                                     >
                                                                                         <option value="">- 選擇隊員 -</option>
                                                                                         {(() => {
+                                                                                            // 修改: 讓下拉選單內的職業排序依照自訂順序
+                                                                                            const sortedPlannerChars = [...(characters || [])].sort((a, b) => {
+                                                                                                const idxA = (jobCategories || []).findIndex(j => j.id === a.jobTypeId);
+                                                                                                const idxB = (jobCategories || []).findIndex(j => j.id === b.jobTypeId);
+                                                                                                const posA = idxA !== -1 ? idxA : 9999;
+                                                                                                const posB = idxB !== -1 ? idxB : 9999;
+                                                                                                if (posA !== posB) return posA - posB;
+                                                                                                return b.level - a.level;
+                                                                                            });
+
                                                                                             const eligible = [];
                                                                                             const quotaFull = [];
                                                                                             const weeklyFullList = [];
                                                                                             const others = [];
                                                                                             
-                                                                                            (characters || []).forEach(c => {
+                                                                                            sortedPlannerChars.forEach(c => {
                                                                                                 if (safeMembers.includes(c.id) && c.id !== memberId) return;
 
                                                                                                 const cAvail = (availability || {})[c.id] || {};
@@ -1582,7 +1638,7 @@
                     if(!newJobCatName) return;
                     setJobCategories([...(jobCategories || []), { 
                         id: 'jc_' + Date.now(), 
-                        group: '自訂/其他', 
+                        group: newJobCatGroup || '其他', 
                         name: newJobCatName, 
                         bgColor: newJobCatBg, 
                         textColor: newJobCatText, 
@@ -1690,30 +1746,44 @@
                             <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">系統設定 - 職業分類標籤管理</h2>
                             <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 dark:bg-gray-700/50 p-4 rounded border dark:border-gray-700">
                                 <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">所屬系別(群組)</label>
+                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-32" placeholder="例: 劍士系" value={newJobCatGroup} onChange={(e) => setNewJobCatGroup(e.target.value)} />
+                                </div>
+                                <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">自訂職業名稱</label>
-                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-40" placeholder="例: 神之子" value={newJobCatName} onChange={(e) => setNewJobCatName(e.target.value)} />
+                                    <input type="text" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded w-32" placeholder="例: 神之子" value={newJobCatName} onChange={(e) => setNewJobCatName(e.target.value)} />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">背景顏色</label>
                                     <input type="color" className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-16 h-[42px] cursor-pointer" value={newJobCatBg} onChange={(e) => setNewJobCatBg(e.target.value)} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">文字外框顏色</label>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">外框顏色</label>
                                     <input type="color" className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-16 h-[42px] cursor-pointer" value={newJobCatText} onChange={(e) => setNewJobCatText(e.target.value)} />
                                 </div>
                                 <button onClick={handleAddJobCat} className="bg-green-600 text-white px-5 py-2 rounded font-bold hover:bg-green-700 h-[42px] shadow transition-colors">新增職業分類</button>
                             </div>
                             
                             <div className="space-y-4 mt-6">
-                                {Object.entries(groupedJobs).map(([groupName, jobs]) => (
+                                {groupedJobsArray.map(({ groupName, jobs }) => (
                                     <div key={groupName} className="border border-gray-200 dark:border-gray-700 p-4 rounded bg-white dark:bg-gray-800 shadow-sm transition-colors">
-                                        <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-3 border-b dark:border-gray-700 pb-1">{groupName}</h3>
+                                        <div className="flex justify-between items-center mb-3 border-b dark:border-gray-700 pb-1">
+                                            <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400">{groupName}</h3>
+                                            <div className="flex space-x-2">
+                                                <button onClick={() => moveGroup(groupName, -1)} className="text-gray-400 hover:text-blue-500 font-bold" title="群組上移">▲</button>
+                                                <button onClick={() => moveGroup(groupName, 1)} className="text-gray-400 hover:text-blue-500 font-bold" title="群組下移">▼</button>
+                                            </div>
+                                        </div>
                                         <div className="flex flex-wrap gap-2">
                                             {jobs.map(jc => (
-                                                <div key={jc.id} className="px-2 py-1 rounded flex items-center space-x-1 shadow-sm text-sm transition-all hover:scale-105" style={getJobStyle(jc.id)}>
+                                                <div key={jc.id} className="px-2 py-1 rounded flex items-center shadow-sm text-sm transition-all hover:scale-105" style={getJobStyle(jc.id)}>
                                                     <span className="font-bold">{jc.name}</span>
+                                                    <div className="flex flex-col ml-2 pl-1 border-l border-black/20 dark:border-white/20">
+                                                        <button onClick={() => moveJob(jc.id, -1)} className="text-[10px] leading-none opacity-60 hover:opacity-100 hover:text-blue-500 py-0.5" title="往前移">▲</button>
+                                                        <button onClick={() => moveJob(jc.id, 1)} className="text-[10px] leading-none opacity-60 hover:opacity-100 hover:text-blue-500 py-0.5" title="往後移">▼</button>
+                                                    </div>
                                                     <button 
-                                                        className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 font-black ml-1 opacity-60 hover:opacity-100 transition-opacity"
+                                                        className="ml-2 font-black opacity-60 hover:opacity-100 hover:text-red-500 transition-opacity"
                                                         onClick={() => setJobCategories((jobCategories || []).filter(j => j.id !== jc.id))}
                                                         title="刪除"
                                                     >✕</button>
@@ -1834,7 +1904,6 @@
                                                         value={acc.passcode !== undefined ? acc.passcode : ''} 
                                                         onChange={(e) => {
                                                             const val = e.target.value;
-                                                            // 限制只能輸入英文字母和數字，最多 8 碼
                                                             if (val === '' || /^[a-zA-Z0-9]{0,8}$/.test(val)) {
                                                                 updateDraft(acc.id, 'passcode', val);
                                                             }
@@ -2015,7 +2084,7 @@
                                                 }}
                                             >
                                                 <option value="" disabled>-- 選擇職業 --</option>
-                                                {Object.entries(groupedJobs).map(([groupName, jobs]) => (
+                                                {groupedJobsArray.map(({ groupName, jobs }) => (
                                                     <optgroup key={groupName} label={groupName}>
                                                         {jobs.map(jc => <option key={jc.id} value={jc.id}>{jc.name}</option>)}
                                                     </optgroup>
