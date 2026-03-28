@@ -138,6 +138,7 @@
             const [availability, _setAvailability] = useState(initialAvailability);
             const [groups, _setGroups] = useState(initialGroups);
             const [weekStartDate, _setWeekStartDate] = useState(new Date().toISOString().split('T')[0]); 
+            const [quickAssignColor, _setQuickAssignColor] = useState('#3b82f6'); // 新增：快速指派按鈕顏色
 
             // App UI 導覽狀態
             const [loggedInId, setLoggedInId] = useState(() => getLocal('waku-raid-loggedInId') || null);
@@ -250,8 +251,9 @@
                         _setAvailability(data.availability || initialAvailability || {});
                         _setGroups(data.groups || initialGroups || []);
                         _setWeekStartDate(data.weekStartDate || new Date().toISOString().split('T')[0]);
+                        _setQuickAssignColor(data.quickAssignColor || '#3b82f6'); // 讀取自訂顏色
                     } else {
-                        setDoc(docRef, { bosses: initialBosses, jobCategories: initialJobCategories, accounts: initialAccounts, characters: initialCharacters, availability: initialAvailability, groups: initialGroups, weekStartDate: new Date().toISOString().split('T')[0] });
+                        setDoc(docRef, { bosses: initialBosses, jobCategories: initialJobCategories, accounts: initialAccounts, characters: initialCharacters, availability: initialAvailability, groups: initialGroups, weekStartDate: new Date().toISOString().split('T')[0], quickAssignColor: '#3b82f6' });
                     }
                 }, (err) => console.error(err));
                 return () => unsub();
@@ -375,6 +377,7 @@
             const setAvailability = (val) => { _setAvailability(val || {}); updateCloud('availability', val || {}); };
             const setGroups = (val) => { _setGroups(val || []); updateCloud('groups', val || []); };
             const setWeekStartDate = (val) => { _setWeekStartDate(val); updateCloud('weekStartDate', val); };
+            const setQuickAssignColor = (val) => { _setQuickAssignColor(val); updateCloud('quickAssignColor', val); }; // 新增：儲存快速指派顏色
 
             const handleLogin = (id) => {
                 setLoggedInId(id);
@@ -1453,17 +1456,22 @@
                                                                 {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && totalWeeklyAssigned < getEffectiveMaxRuns(avail) && (
                                                                     availableGroupsOnDay.length > 0 ? (
                                                                         <select
-                                                                            className="w-full text-[11px] p-1 border border-blue-300 dark:border-blue-700 rounded mt-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 cursor-pointer font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm"
+                                                                            className="w-full text-[11px] p-1 border rounded mt-1 cursor-pointer font-bold focus:outline-none shadow-sm transition-colors"
+                                                                            style={{ 
+                                                                                color: quickAssignColor, 
+                                                                                borderColor: quickAssignColor,
+                                                                                backgroundColor: darkMode ? '#1f2937' : quickAssignColor + '15'
+                                                                            }}
                                                                             value=""
                                                                             onChange={(e) => assignCharToGroup(char.id, e.target.value)}
                                                                             title="直接指派到王團"
                                                                         >
-                                                                            <option value="" disabled>+ 快速指派</option>
+                                                                            <option value="" disabled className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">+ 快速指派</option>
                                                                             {availableGroupsOnDay.map(g => {
                                                                                 const conflictNames = accountGroupsOnDay.map(ag => ag.name);
                                                                                 const warnText = conflictNames.length > 0 ? ` (⚠️已排: ${conflictNames.join(', ')})` : '';
                                                                                 return (
-                                                                                    <option key={g.id} value={g.id} className="dark:bg-gray-800 dark:text-gray-200">
+                                                                                    <option key={g.id} value={g.id} className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">
                                                                                         {g.name}{warnText}
                                                                                     </option>
                                                                                 )
@@ -2105,11 +2113,23 @@
                         </div>
 
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-t-4 border-yellow-500 transition-colors">
-                            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">系統設定 - 排班日期與換週</h2>
+                            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">系統設定 - 全域設定與換週</h2>
                             <div className="flex flex-wrap gap-4 items-end bg-gray-50 dark:bg-gray-700/50 p-4 rounded border dark:border-gray-700">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">本週起始日期 (通常設為週四)</label>
                                     <input type="date" className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded h-[42px] cursor-pointer" value={weekStartDate} onChange={(e) => setWeekStartDate(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">快速指派按鈕顏色</label>
+                                    <div className="flex items-center space-x-2">
+                                        <input type="color" className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-16 h-[42px] cursor-pointer" value={quickAssignColor} onChange={(e) => setQuickAssignColor(e.target.value)} />
+                                        <div 
+                                            className="text-[11px] font-bold px-3 py-1.5 border rounded"
+                                            style={{ color: quickAssignColor, borderColor: quickAssignColor, backgroundColor: darkMode ? '#1f2937' : quickAssignColor + '15' }}
+                                        >
+                                            + 快速指派 (預覽)
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="ml-auto">
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">每週重置</label>
@@ -2245,7 +2265,7 @@
                                                     const jd = getJoinDate(acc);
                                                     if (!jd) return '舊版帳號';
                                                     const d = new Date(jd);
-                                                    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+                                                    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                                                 })()}
                                             </td>
                                             <td className="p-3 border dark:border-gray-700 text-center">
@@ -2418,7 +2438,7 @@
                                 <div className="space-y-4">
                                     <div>
                                         <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">角色名稱 (與帳號綁定)</label>
-                                        <input type="text" className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-700/50 font-bold text-gray-500 dark:text-gray-400 cursor-not-allowed" value={currentAccount.playerName} disabled title="角色名稱與帳號名稱連動" />
+                                        <input type="text" className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 font-bold text-gray-500 dark:text-gray-400 cursor-not-allowed" value={currentAccount.playerName} disabled title="角色名稱與帳號名稱連動" />
                                     </div>
                                     <div className="flex gap-4">
                                         <div className="flex-1">
