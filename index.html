@@ -151,6 +151,7 @@
             const [raidFilterMode, setRaidFilterMode] = useState('all');
             const [draftAccounts, setDraftAccounts] = useState([]);
             const [accSortMode, setAccSortMode] = useState('roleDesc'); 
+            const [showRegistrationTime, setShowRegistrationTime] = useState(true); // 報名時間顯示狀態
             
             // 密碼顯示狀態
             const [visiblePasswords, setVisiblePasswords] = useState({});
@@ -410,6 +411,12 @@
                 const newJc = [...jobCategories];
                 [newJc[idx], newJc[targetIdx]] = [newJc[targetIdx], newJc[idx]];
                 setJobCategories(newJc);
+            };
+
+            const formatUpdateTime = (ts) => {
+                if (!ts) return '';
+                const d = new Date(ts);
+                return `${d.getMonth()+1}/${d.getDate()}-${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
             };
 
             // --- Modal 控制與執行邏輯 ---
@@ -780,7 +787,12 @@
 
                 const saveToCloud = () => {
                     if (Object.keys(localAvail).length > 0) {
-                        const mergedAvailability = { ...(availability || {}), ...localAvail };
+                        const now = Date.now();
+                        const updatedLocal = {};
+                        for (const charId in localAvail) {
+                            updatedLocal[charId] = { ...localAvail[charId], lastUpdated: now };
+                        }
+                        const mergedAvailability = { ...(availability || {}), ...updatedLocal };
                         setAvailability(mergedAvailability);
                         setLocalAvail({}); 
                     }
@@ -934,7 +946,7 @@
 
                         <div className="text-right">
                             <button onClick={saveToCloud} className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-lg">
-                                確認報名
+                                更新/確認報名
                             </button>
                         </div>
                     </div>
@@ -1083,7 +1095,14 @@
                                         </div>
                                     </th>
                                     <th className="p-2 border dark:border-gray-700 w-1/4">報名的王團</th>
-                                    <th className="p-2 border dark:border-gray-700 w-1/5">備註</th>
+                                    <th className="p-2 border dark:border-gray-700 w-1/5">
+                                        <div className="flex items-center space-x-1">
+                                            <span>備註</span>
+                                            <button onClick={() => setShowRegistrationTime(!showRegistrationTime)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none ml-1" title={showRegistrationTime ? "隱藏報名時間" : "顯示報名時間"}>
+                                                {showRegistrationTime ? '👁️' : '🙈'}
+                                            </button>
+                                        </div>
+                                    </th>
                                     {days.map((day, i) => (
                                         <th key={i} className="p-2 border dark:border-gray-700 text-center min-w-[90px] align-top">
                                             <div className="font-bold text-gray-800 dark:text-gray-200 text-base">{day.split(' ')[0]}</div>
@@ -1157,12 +1176,17 @@
                                                 </div>
                                             </td>
                                             <td className="p-2 border dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs whitespace-normal min-w-[120px]">
-                                                <div className="mb-1">
-                                                    <span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/30 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800 inline-block shadow-sm">
+                                                <div className="mb-1 flex items-center space-x-1">
+                                                    <span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/30 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800 inline-block shadow-sm whitespace-nowrap">
                                                         {getEffectiveMaxRuns(avail)}團
                                                     </span>
+                                                    {showRegistrationTime && avail.lastUpdated && (
+                                                        <span className="text-[10px] text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600 inline-block whitespace-nowrap" title="最後更新時間">
+                                                            {formatUpdateTime(avail.lastUpdated)}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                {avail.note || ''}
+                                                <div className="break-words">{avail.note || ''}</div>
                                             </td>
                                             {safeDays.map((isAvail, dayIndex) => {
                                                 const charGroupsOnDay = (groups || []).filter(g => g.dayIndex === dayIndex && ((g.members || []).includes(char.id) || (g.reserves || []).includes(char.id)));
