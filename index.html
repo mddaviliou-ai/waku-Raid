@@ -63,7 +63,7 @@
         };
 
         // ⚠️【系統強制重置密碼】⚠️ (當系統崩潰或測試完要清空時，連點登入頁左上角的劍3下輸入此密碼)
-        const MASTER_RESET_PASSWORD = "ji3g4t86ua3"; // <--- 您可以在這裡自訂您的專屬重置密碼
+        const MASTER_RESET_PASSWORD = "ji3g4t86au3"; // <--- 您可以在這裡自訂您的專屬重置密碼
 
         try {
             const envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -761,6 +761,34 @@
                     setLocalAvail({ ...localAvail, [charId]: { ...charAvail, days: newDays } });
                 };
 
+                const handleSelectAllDays = (charId) => {
+                    const charAvail = getAvail(charId);
+                    const allSelected = charAvail.days.every(d => d);
+                    
+                    let newDays = [...charAvail.days];
+                    let hasError = false;
+
+                    if (allSelected) {
+                        // 取消全選
+                        for (let i = 0; i < 7; i++) {
+                            const scheduledOnDay = (groups || []).some(g => g.dayIndex === i && ((g.members || []).includes(charId) || (g.reserves || []).includes(charId)));
+                            if (scheduledOnDay) {
+                                hasError = true; // 已經被排班的不能取消
+                            } else {
+                                newDays[i] = false;
+                            }
+                        }
+                        if (hasError) {
+                            setAlertMessage('⚠️ 部分日期取消失敗！\n因為該角色在某些日期已經被排入隊伍了。\n若需請假，請聯絡管理員協助移除。');
+                        }
+                    } else {
+                        // 全選
+                        newDays = Array(7).fill(true);
+                    }
+                    
+                    setLocalAvail({ ...localAvail, [charId]: { ...charAvail, days: newDays } });
+                };
+
                 const toggleBoss = (charId, bossId) => {
                     const charAvail = getAvail(charId);
                     const currentBosses = charAvail.bosses || [];
@@ -925,7 +953,15 @@
 
                                     {/* 日期選擇 */}
                                     <div className="mb-4">
-                                        <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-2">請勾選可出團的日期：</h3>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <h3 className="font-bold text-gray-700 dark:text-gray-300">請勾選可出團的日期：</h3>
+                                            <button 
+                                                onClick={() => handleSelectAllDays(char.id)}
+                                                className="text-xs px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-800/50 rounded font-bold transition-colors border border-blue-200 dark:border-blue-700"
+                                            >
+                                                {charAvail.days.every(d => d) ? '取消全選' : '全選'}
+                                            </button>
+                                        </div>
                                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                                             {days.map((day, index) => (
                                                 <label key={index} className={`cursor-pointer border rounded-lg p-3 flex flex-col items-center justify-center transition-colors ${charAvail.days[index] ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-400 dark:border-blue-500' : 'bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-600'}`}>
@@ -957,7 +993,7 @@
 
                         <div className="text-right">
                             <button onClick={saveToCloud} className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-lg">
-                                更新/確認報名
+                                確認報名
                             </button>
                         </div>
                     </div>
@@ -1305,6 +1341,7 @@
                                                                     )
                                                                 })}
 
+                                                                {/* 修正：圖示完美回歸，加入 2 團反灰保護 */}
                                                                 {charGroupsOnDay.length === 0 && (
                                                                     <div className="text-lg drop-shadow-sm select-none my-1 flex flex-wrap justify-center gap-2">
                                                                         {safeBosses.map(bId => {
