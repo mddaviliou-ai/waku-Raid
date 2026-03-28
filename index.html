@@ -1466,7 +1466,7 @@
                                                                             onChange={(e) => assignCharToGroup(char.id, e.target.value)}
                                                                             title="直接指派到王團"
                                                                         >
-                                                                            <option value="" disabled className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">+ 快速指派</option>
+                                                                            <option value="" disabled className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">+ 指派</option>
                                                                             {availableGroupsOnDay.map(g => {
                                                                                 const conflictNames = accountGroupsOnDay.map(ag => ag.name);
                                                                                 const warnText = conflictNames.length > 0 ? ` (⚠️已排: ${conflictNames.join(', ')})` : '';
