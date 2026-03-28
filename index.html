@@ -63,7 +63,7 @@
         };
 
         // ⚠️【系統強制重置密碼】⚠️ (當系統崩潰或測試完要清空時，連點登入頁左上角的劍3下輸入此密碼)
-        const MASTER_RESET_PASSWORD = "ji3g4t86au3"; // <--- 您可以在這裡自訂您的專屬重置密碼
+        const MASTER_RESET_PASSWORD = "ji3g4t86ua3"; // <--- 您可以在這裡自訂您的專屬重置密碼
 
         try {
             const envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -144,6 +144,11 @@
             const currentAccount = (accounts || []).find(a => a.id === loggedInId) || null;
             const [activeTab, setActiveTab] = useState('my-schedule');
 
+            // 新增：在線狀態追蹤
+            const [onlineUsersMap, setOnlineUsersMap] = useState({});
+            const [activeOnlineUsers, setActiveOnlineUsers] = useState([]);
+            const [isOnlineListOpen, setIsOnlineListOpen] = useState(false);
+
             // 各分頁子狀態
             const [localAvail, setLocalAvail] = useState({});
             const [matrixSortMode, setMatrixSortMode] = useState('default');
@@ -161,6 +166,8 @@
             const [newBossName, setNewBossName] = useState('');
             const [newBossIcon, setNewBossIcon] = useState('🔥');
             const [newBossColor, setNewBossColor] = useState('#ef4444');
+            const [editBossId, setEditBossId] = useState(null); // 新增：編輯王團 ID 狀態
+
             const [newJobCatName, setNewJobCatName] = useState('');
             const [newJobCatGroup, setNewJobCatGroup] = useState('自訂系別');
             const [newJobCatBg, setNewJobCatBg] = useState('#dbeafe');
@@ -179,7 +186,7 @@
             const [accountToDelete, setAccountToDelete] = useState(null);
             const [groupToDelete, setGroupToDelete] = useState(null);
             const [registrationToDelete, setRegistrationToDelete] = useState(null);
-            const [groupStatusToToggle, setGroupStatusToToggle] = useState(null); // 新增：變更隊伍狀態的確認
+            const [groupStatusToToggle, setGroupStatusToToggle] = useState(null); 
             const [deletePromptInput, setDeletePromptInput] = useState('');
             
             const [alertMessage, setAlertMessage] = useState('');
@@ -249,6 +256,50 @@
                 }, (err) => console.error(err));
                 return () => unsub();
             }, [user]);
+
+            // Firebase 在線狀態同步 (讀取)
+            useEffect(() => {
+                if (!user || !db) return;
+                const presenceRef = doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'presence');
+                const unsub = onSnapshot(presenceRef, (snap) => {
+                    if (snap.exists()) {
+                        setOnlineUsersMap(snap.data());
+                    }
+                }, (err) => console.error(err));
+                return () => unsub();
+            }, [user]);
+
+            // Firebase 在線狀態發送 (心跳機制)
+            useEffect(() => {
+                if (!user || !db || !currentAccount) return;
+                const presenceRef = doc(db, 'artifacts', appId, 'public', 'data', 'guildState', 'presence');
+                
+                const updatePresence = () => {
+                    setDoc(presenceRef, { [currentAccount.id]: Date.now() }, { merge: true }).catch(e => console.error("Presence error", e));
+                };
+                
+                updatePresence(); // 登入或掛載時立刻觸發一次
+                const intervalId = setInterval(updatePresence, 30000); // 每 30 秒更新一次
+                
+                return () => clearInterval(intervalId);
+            }, [user, currentAccount]);
+
+            // 在線名單本地計算 (每 10 秒重新檢查一次是否超時)
+            useEffect(() => {
+                const checkOnline = () => {
+                    const now = Date.now();
+                    const activeIds = Object.keys(onlineUsersMap).filter(id => {
+                        const ts = onlineUsersMap[id];
+                        return (now - ts) < 60000; // 60秒內有發送心跳視為在線
+                    });
+                    const activeAccs = activeIds.map(id => (accounts || []).find(a => a.id === id)).filter(Boolean);
+                    setActiveOnlineUsers(activeAccs);
+                };
+                
+                checkOnline();
+                const intervalId = setInterval(checkOnline, 10000);
+                return () => clearInterval(intervalId);
+            }, [onlineUsersMap, accounts]);
 
             useEffect(() => {
                 setDraftAccounts(accounts || []);
@@ -1253,11 +1304,19 @@
                                                     {safeBosses.map(bId => {
                                                         const b = (bosses || []).find(x => x.id === bId);
                                                         const count = parseInt(safeBossCounts[bId]) || 1;
-                                                        return b ? (
+                                                        // 增加防呆：如果舊的王團已被刪除，顯示一個灰色的已刪除標籤，避免藍色框框幽靈出沒
+                                                        if (!b) {
+                                                            return (
+                                                                <span key={bId} className="bg-gray-100 text-gray-500 border-gray-300 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600 px-1.5 py-0.5 rounded border text-xs font-bold shadow-sm whitespace-nowrap" title="此王團已被管理員刪除，請重新勾選報名">
+                                                                    🗑️ 已刪除的王團
+                                                                </span>
+                                                            );
+                                                        }
+                                                        return (
                                                             <span key={bId} style={{ borderColor: b.color, color: b.color }} className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded border text-xs font-bold shadow-sm whitespace-nowrap">
                                                                 {b.icon} {b.name} {count > 1 && `x${count}`}
                                                             </span>
-                                                        ) : null;
+                                                        );
                                                     })}
                                                 </div>
                                             </td>
@@ -1314,7 +1373,8 @@
                                                             <div className="flex flex-col items-center gap-1">
                                                                 {charGroupsOnDay.map(g => {
                                                                     const b = (bosses || []).find(x => x.id === g.bossId);
-                                                                    const tagColor = b ? b.color : '#3b82f6';
+                                                                    // 如果因為舊王團被刪除導致找不到，就變成灰色，以免卡在藍色導致困惑
+                                                                    const tagColor = b ? b.color : '#9ca3af'; 
                                                                     
                                                                     const conflictGroups = accountGroupsOnDay.filter(ag => {
                                                                         if (ag.id === g.id) {
@@ -1386,7 +1446,7 @@
                                                                         </div>
                                                                     ) : availableGroupsOnDay.length > 0 ? (
                                                                         <select
-                                                                            className="w-full text-[11px] p-1 border border-blue-300 dark:border-blue-700 rounded mt-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 cursor-pointer font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            className="w-full text-[11px] p-1 border border-gray-300 dark:border-gray-600 rounded mt-1 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer font-bold focus:outline-none focus:ring-1 focus:ring-gray-400 shadow-sm"
                                                                             value=""
                                                                             onChange={(e) => assignCharToGroup(char.id, e.target.value)}
                                                                             title="直接指派到王團"
@@ -1546,11 +1606,29 @@
                                                                 </span>
                                                             )
                                                         )}
-                                                        <h4 className={`font-bold ${isCompleted ? 'text-gray-600 dark:text-gray-400' : 'text-gray-800 dark:text-gray-100'}`}>{group.name}</h4>
+                                                        <h4 className={`font-bold ${isCompleted ? 'text-gray-600 dark:text-gray-400' : ''}`} style={!isCompleted ? { color: boss.color } : {}}>{group.name}</h4>
                                                     </div>
                                                     <div className="flex items-center space-x-2">
-                                                        <div className={`text-sm font-bold px-2 py-1 rounded border ${isCompleted ? 'text-gray-500 bg-gray-50 border-gray-300 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-400' : 'text-indigo-700 dark:text-indigo-300 bg-white dark:bg-gray-800 border-indigo-200 dark:border-indigo-700'}`}>
-                                                            {days[group.dayIndex].split(' ')[0]} ({days[group.dayIndex].split(' ')[1]}) | {group.time}
+                                                        <div 
+                                                            className={`text-sm font-bold px-2 py-1 rounded border flex items-center ${isCompleted ? 'text-gray-500 bg-gray-50 border-gray-300 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-400' : 'bg-white dark:bg-gray-800 shadow-sm'}`}
+                                                            style={!isCompleted ? { color: boss.color, borderColor: boss.color } : {}}
+                                                        >
+                                                            <span>{days[group.dayIndex].split(' ')[0]} ({days[group.dayIndex].split(' ')[1]}) | {group.time}</span>
+                                                            {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && !isCompleted && (
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        const newTime = window.prompt("請輸入新的出團時間或備註：", group.time);
+                                                                        if (newTime !== null && newTime.trim() !== "") {
+                                                                            const newGroups = (groups || []).map(g => g.id === group.id ? { ...g, time: newTime.trim() } : g);
+                                                                            setGroups(newGroups);
+                                                                        }
+                                                                    }} 
+                                                                    className="ml-2 opacity-50 hover:opacity-100 transition-opacity"
+                                                                    title="編輯時間"
+                                                                >
+                                                                    ✏️
+                                                                </button>
+                                                            )}
                                                         </div>
                                                         {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && !isCompleted && (
                                                             <button 
@@ -1784,8 +1862,19 @@
              const renderSystemManagement = () => {
                 const handleAddBoss = () => {
                     if(!newBossName || !newBossIcon) return;
-                    setBosses([...(bosses || []), { id: 'b_' + Date.now(), name: newBossName, icon: newBossIcon, color: newBossColor }]);
-                    setNewBossName('');
+                    if (editBossId) {
+                        // 如果有 editBossId，代表是修改模式
+                        setBosses((bosses || []).map(b => b.id === editBossId ? {
+                            ...b, name: newBossName, icon: newBossIcon, color: newBossColor
+                        } : b));
+                        setEditBossId(null);
+                        setNewBossName('');
+                        setAlertMessage('✅ 王團資訊已成功更新！報名表與成團表會同步套用新顏色！');
+                    } else {
+                        // 新增模式
+                        setBosses([...(bosses || []), { id: 'b_' + Date.now(), name: newBossName, icon: newBossIcon, color: newBossColor }]);
+                        setNewBossName('');
+                    }
                 };
 
                 const handleAddJobCat = () => {
@@ -1875,23 +1964,46 @@
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">名稱顏色</label>
                                     <input type="color" className="border dark:border-gray-600 bg-white dark:bg-gray-700 p-1 rounded w-16 h-[42px] cursor-pointer" value={newBossColor} onChange={(e) => setNewBossColor(e.target.value)} />
                                 </div>
-                                <button onClick={handleAddBoss} className="bg-red-600 text-white px-5 py-2 rounded font-bold hover:bg-red-700 h-[42px] shadow transition-colors">新增王團</button>
+                                <div className="flex space-x-2">
+                                    {editBossId && (
+                                        <button onClick={() => {
+                                            setEditBossId(null);
+                                            setNewBossName('');
+                                        }} className="bg-gray-400 text-white px-4 py-2 rounded font-bold hover:bg-gray-500 h-[42px] shadow transition-colors">取消</button>
+                                    )}
+                                    <button onClick={handleAddBoss} className="bg-red-600 text-white px-5 py-2 rounded font-bold hover:bg-red-700 h-[42px] shadow transition-colors">
+                                        {editBossId ? '儲存修改' : '新增王團'}
+                                    </button>
+                                </div>
                             </div>
                             <div className="flex flex-wrap gap-3 mt-6">
                                 {(bosses || []).map((boss, idx) => (
-                                    <div key={boss.id} style={{ borderColor: boss.color, backgroundColor: darkMode ? '#374151' : boss.color + '10' }} className="border-2 px-3 py-2 rounded flex items-center space-x-2 shadow-sm">
-                                        <span className="text-xl drop-shadow-sm">{boss.icon}</span>
+                                    <div 
+                                        key={boss.id} 
+                                        style={{ borderColor: boss.color, backgroundColor: darkMode ? '#374151' : boss.color + '10' }} 
+                                        className={`border-2 px-3 py-2 rounded flex items-center shadow-sm cursor-pointer transition-all hover:scale-105 ring-offset-1 dark:ring-offset-gray-800 hover:ring-2 hover:ring-red-400 ${editBossId === boss.id ? 'ring-2 ring-red-500 scale-105' : ''}`}
+                                        onClick={() => {
+                                            setEditBossId(boss.id);
+                                            setNewBossName(boss.name);
+                                            setNewBossIcon(boss.icon);
+                                            setNewBossColor(boss.color);
+                                        }}
+                                        title="點擊編輯此王團"
+                                    >
+                                        <span className="text-xl drop-shadow-sm mr-2">{boss.icon}</span>
                                         <span className="font-bold" style={{ color: boss.color }}>{boss.name}</span>
                                         
-                                        <div className="flex flex-col ml-2 border-l pl-2 border-gray-300/50 dark:border-gray-600">
+                                        <div className="flex flex-col ml-3 border-l pl-2 border-gray-400/30 dark:border-gray-500">
                                             <div className="flex space-x-1">
-                                                <button onClick={() => {
+                                                <button onClick={(e) => {
+                                                    e.stopPropagation();
                                                     if (idx === 0) return;
                                                     const newB = [...bosses];
                                                     [newB[idx - 1], newB[idx]] = [newB[idx], newB[idx - 1]];
                                                     setBosses(newB);
                                                 }} className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 font-black text-xs" title="往上移">▲</button>
-                                                <button onClick={() => {
+                                                <button onClick={(e) => {
+                                                    e.stopPropagation();
                                                     if (idx === bosses.length - 1) return;
                                                     const newB = [...bosses];
                                                     [newB[idx + 1], newB[idx]] = [newB[idx], newB[idx + 1]];
@@ -1901,8 +2013,8 @@
                                         </div>
 
                                         <button 
-                                            className="text-red-500 hover:text-red-700 font-black ml-1 opacity-50 hover:opacity-100 transition-opacity"
-                                            onClick={() => setBosses((bosses || []).filter(b => b.id !== boss.id))}
+                                            className="text-red-500 hover:text-red-700 font-black ml-2 opacity-50 hover:opacity-100 transition-opacity"
+                                            onClick={(e) => { e.stopPropagation(); setBosses((bosses || []).filter(b => b.id !== boss.id)); }}
                                             title="刪除"
                                         >✕</button>
                                     </div>
@@ -2126,7 +2238,7 @@
                                                     const jd = getJoinDate(acc);
                                                     if (!jd) return '舊版帳號';
                                                     const d = new Date(jd);
-                                                    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                                                    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
                                                 })()}
                                             </td>
                                             <td className="p-3 border dark:border-gray-700 text-center">
@@ -2197,6 +2309,45 @@
                                         </div>
                                     );
                                 })()}
+
+                                {/* 🟢 在線人數通知 */}
+                                <div className="relative mr-2">
+                                    <button 
+                                        onClick={() => setIsOnlineListOpen(!isOnlineListOpen)}
+                                        className="flex items-center space-x-1 px-3 py-1 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-full shadow-sm hover:bg-green-100 dark:hover:bg-green-800/50 transition-colors focus:outline-none"
+                                        title="查看目前在線玩家"
+                                    >
+                                        <span className="relative flex h-2.5 w-2.5 mr-1">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                                        </span>
+                                        <span className="text-xs font-bold">{activeOnlineUsers.length} 人在線</span>
+                                    </button>
+
+                                    {isOnlineListOpen && (
+                                        <React.Fragment>
+                                            <div className="fixed inset-0 z-40" onClick={() => setIsOnlineListOpen(false)}></div>
+                                            <div className="absolute top-full mt-2 right-0 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                                                <div className="bg-gray-50 dark:bg-gray-700 px-3 py-2 border-b dark:border-gray-600 font-bold text-sm text-gray-700 dark:text-gray-200">
+                                                    🟢 目前在線玩家
+                                                </div>
+                                                <ul className="max-h-48 overflow-y-auto p-2 space-y-1">
+                                                    {activeOnlineUsers.length > 0 ? (
+                                                        activeOnlineUsers.map(acc => (
+                                                            <li key={acc.id} className="text-sm py-1 px-2 text-gray-700 dark:text-gray-300 flex items-center space-x-2 bg-gray-50 dark:bg-gray-700/50 rounded">
+                                                                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                                                <span className="truncate">{acc.playerName}</span>
+                                                                {acc.id === currentAccount?.id && <span className="text-[10px] text-gray-400">(您)</span>}
+                                                            </li>
+                                                        ))
+                                                    ) : (
+                                                        <li className="text-sm py-1 px-2 text-gray-400 text-center">尚無其他玩家在線</li>
+                                                    )}
+                                                </ul>
+                                            </div>
+                                        </React.Fragment>
+                                    )}
+                                </div>
 
                                 {/* 切換深色模式按鈕 */}
                                 <button 
