@@ -63,7 +63,7 @@
         };
 
         // ⚠️【系統強制重置密碼】⚠️ (當系統崩潰或測試完要清空時，連點登入頁左上角的劍3下輸入此密碼)
-        const MASTER_RESET_PASSWORD = "ji3g4t86ua3"; // <--- 您可以在這裡自訂您的專屬重置密碼
+        const MASTER_RESET_PASSWORD = "ji3g4t86au3"; // <--- 您可以在這裡自訂您的專屬重置密碼
 
         try {
             const envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -876,16 +876,27 @@
                 };
 
                 const saveToCloud = () => {
+                    const now = Date.now();
+                    const updatedAvail = { ...(availability || {}) };
+                    const myChars = (characters || []).filter(c => c.accountId === currentAccount.id);
+
+                    // 合併所有本地修改
                     if (Object.keys(localAvail).length > 0) {
-                        const now = Date.now();
-                        const updatedLocal = {};
                         for (const charId in localAvail) {
-                            updatedLocal[charId] = { ...localAvail[charId], lastUpdated: now };
+                            updatedAvail[charId] = { ...localAvail[charId], lastUpdated: now };
                         }
-                        const mergedAvailability = { ...(availability || {}), ...updatedLocal };
-                        setAvailability(mergedAvailability);
-                        setLocalAvail({}); 
                     }
+
+                    // 強制刷新該玩家所有角色的報名時間 (就算沒改選項也可以點擊來置頂時間)
+                    myChars.forEach(char => {
+                        if (!updatedAvail[char.id]) {
+                            updatedAvail[char.id] = { days: Array(7).fill(false), bosses: [], bossCounts: {}, note: '', maxWeeklyRuns: 2 };
+                        }
+                        updatedAvail[char.id].lastUpdated = now;
+                    });
+
+                    setAvailability(updatedAvail);
+                    setLocalAvail({}); 
                     setAlertMessage('報名成功🎉');
                 };
 
@@ -1321,7 +1332,7 @@
                                                 </div>
                                             </td>
                                             <td className="p-2 border dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs whitespace-normal min-w-[120px]">
-                                                <div className="mb-1 flex flex-wrap items-center gap-1">
+                                                <div className="mb-1 flex flex-col items-start gap-0.5">
                                                     {(() => {
                                                         const maxRuns = getEffectiveMaxRuns(avail);
                                                         let statusColorClass = "bg-green-50 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800";
@@ -1337,12 +1348,12 @@
                                                         );
                                                     })()}
                                                     {showRegistrationTime && avail.lastUpdated && (
-                                                        <span className="text-[10px] text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600 inline-block whitespace-nowrap" title="最後更新時間">
+                                                        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium tracking-tight" title="最後更新時間">
                                                             {formatUpdateTime(avail.lastUpdated)}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div className="break-words">{avail.note || ''}</div>
+                                                <div className="break-words mt-1">{avail.note || ''}</div>
                                             </td>
                                             {safeDays.map((isAvail, dayIndex) => {
                                                 const charGroupsOnDay = (groups || []).filter(g => g.dayIndex === dayIndex && ((g.members || []).includes(char.id) || (g.reserves || []).includes(char.id)));
@@ -1439,14 +1450,10 @@
                                                                     </div>
                                                                 )}
 
-                                                                {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && (
-                                                                    totalWeeklyAssigned >= getEffectiveMaxRuns(avail) ? (
-                                                                        <div className="w-full text-[10px] text-red-500 text-center mt-1 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded py-0.5 font-bold" title="此角色已達本週出勤上限">
-                                                                            已達上限
-                                                                        </div>
-                                                                    ) : availableGroupsOnDay.length > 0 ? (
+                                                                {(currentAccount.role === 'admin' || currentAccount.role === 'subadmin') && totalWeeklyAssigned < getEffectiveMaxRuns(avail) && (
+                                                                    availableGroupsOnDay.length > 0 ? (
                                                                         <select
-                                                                            className="w-full text-[11px] p-1 border border-gray-300 dark:border-gray-600 rounded mt-1 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer font-bold focus:outline-none focus:ring-1 focus:ring-gray-400 shadow-sm"
+                                                                            className="w-full text-[11px] p-1 border border-blue-300 dark:border-blue-700 rounded mt-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 cursor-pointer font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm"
                                                                             value=""
                                                                             onChange={(e) => assignCharToGroup(char.id, e.target.value)}
                                                                             title="直接指派到王團"
